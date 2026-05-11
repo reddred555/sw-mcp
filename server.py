@@ -143,7 +143,6 @@ def sw_save(filepath: str) -> str:
 def sw_get_mass_properties() -> str:
     """Отримати масо-інерційні характеристики поточної деталі."""
     ext = currentDoc.Extension
-    status = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
     mp = ext.CreateMassProperty2()
     if mp is None:
         return "Не вдалось отримати масо-інерційні характеристики."
