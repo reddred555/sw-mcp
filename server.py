@@ -106,8 +106,11 @@ def sw_close_document(path: str, save: bool = False) -> str:
 def sw_new_part() -> str:
     """Створити нову деталь."""
     global currentDoc
-    # swDefaultTemplatePart (9) повертає повний шлях до файлу шаблону
-    path = swApp.GetUserPreferenceStringValue(9)
+    path = ""
+    try:
+        path = swApp.GetUserPreferenceStringValue(9)
+    except Exception:
+        pass
     if not path or not os.path.exists(path):
         candidates = [
             r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2022\templates\Part.PRTDOT",
