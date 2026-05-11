@@ -32,6 +32,8 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_get_mass_properties()` | Маса, об'єм, площа, щільність, центр мас |
 | `sw_list_features()` | Список features з типом і статусом (придушено/активно) |
 | `sw_rebuild()` | Перебудувати документ (Ctrl+B) |
+| `sw_suppress_feature(name)` | Придушити feature за назвою |
+| `sw_unsuppress_feature(name)` | Зняти придушення з feature за назвою |
 
 ### SolidWorks — Sheet Metal
 | Інструмент | Опис |
