@@ -139,6 +139,27 @@ def sw_save(filepath: str) -> str:
     currentDoc.SaveAs3(filepath, 0, 2)
     return f"Збережено: {filepath}"
 
+@mcp.tool()
+def sw_get_mass_properties() -> str:
+    """Отримати масо-інерційні характеристики поточної деталі."""
+    ext = currentDoc.Extension
+    status = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+    mp = ext.CreateMassProperty2()
+    if mp is None:
+        return "Не вдалось отримати масо-інерційні характеристики."
+    mass = mp.Mass
+    vol = mp.Volume
+    area = mp.SurfaceArea
+    density = mp.Density
+    cx, cy, cz = mp.CenterOfMass
+    return (
+        f"Маса:     {mass * 1000:.4f} г\n"
+        f"Об'єм:    {vol * 1e6:.4f} см³\n"
+        f"Площа:    {area * 1e4:.4f} см²\n"
+        f"Щільність:{density / 1000:.4f} г/см³\n"
+        f"ЦМ:       X={cx*1000:.3f} Y={cy*1000:.3f} Z={cz*1000:.3f} мм"
+    )
+
 # ─────────────────────────────────────────
 # SOLIDWORKS — SHEET METAL
 # ─────────────────────────────────────────
