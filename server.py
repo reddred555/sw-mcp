@@ -175,6 +175,12 @@ def sw_list_features() -> str:
         feat = feat.GetNextFeature()
     return "\n".join(lines)
 
+@mcp.tool()
+def sw_rebuild() -> str:
+    """Перебудувати поточний документ (Ctrl+B)."""
+    result = currentDoc.ForceRebuild3(False)
+    return "Rebuild виконано." if result else "Rebuild завершено з попередженнями."
+
 # ─────────────────────────────────────────
 # SOLIDWORKS — SHEET METAL
 # ─────────────────────────────────────────
