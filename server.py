@@ -11,11 +11,16 @@ import os
 
 mcp = FastMCP("stukach-sw-mcp")
 swApp = None
-currentDoc = None
 
 ARTCAM_EXE = r"C:\Program Files\ArtCAM 2012\ArtCAM.exe"
 ARTCAM_MACROS = r"C:\STUKACH\sw-mcp\artcam_macros"
 WORK_DIR = r"C:\STUKACH\work"
+
+def _doc():
+    doc = swApp.ActiveDoc
+    if doc is None:
+        raise RuntimeError("Немає активного документа. Відкрийте або створіть деталь.")
+    return doc
 
 # ─────────────────────────────────────────
 # SOLIDWORKS — З'ЄДНАННЯ
@@ -37,6 +42,7 @@ def sw_list_documents() -> str:
     if doc is None:
         return "Немає відкритих документів."
     doc_types = {1: "Part", 2: "Assembly", 3: "Drawing"}
+    active = swApp.ActiveDoc
     lines = []
     seen = set()
     while doc is not None:
@@ -46,9 +52,9 @@ def sw_list_documents() -> str:
         if key not in seen:
             seen.add(key)
             doc_type = doc_types.get(doc.GetType(), "Unknown")
-            active = " ← активний" if doc == currentDoc else ""
+            is_active = " ← активний" if active and doc.GetTitle() == active.GetTitle() else ""
             saved = "" if doc.GetSaveFlag() else " [не збережено]"
-            lines.append(f"[{doc_type}] {title}{saved}{active}\n  {path or '(без шляху)'}")
+            lines.append(f"[{doc_type}] {title}{saved}{is_active}\n  {path or '(без шляху)'}")
         doc = doc.GetNext()
     return "\n".join(lines)
 
@@ -61,8 +67,6 @@ def sw_activate_document(path: str) -> str:
             errors = swApp.ActivateDoc3(doc.GetPathName() or doc.GetTitle(), False, 0)
             if errors:
                 return f"Помилка активації: код {errors}"
-            global currentDoc
-            currentDoc = doc
             return f"Активовано: {doc.GetTitle()}"
         doc = doc.GetNext()
     return f"Документ не знайдено: {path}"
@@ -70,7 +74,6 @@ def sw_activate_document(path: str) -> str:
 @mcp.tool()
 def sw_open_document(path: str) -> str:
     """Відкрити документ SW (.sldprt / .sldasm / .slddrw) за повним шляхом."""
-    global currentDoc
     if not os.path.exists(path):
         return f"Файл не знайдено: {path}"
     errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
@@ -78,13 +81,11 @@ def sw_open_document(path: str) -> str:
     doc = swApp.OpenDoc6(path, 0, 1, "", errors, warnings)
     if doc is None:
         return f"Не вдалось відкрити: {path} (errors={errors.value})"
-    currentDoc = doc
     return f"Відкрито: {doc.GetTitle()}"
 
 @mcp.tool()
 def sw_close_document(path: str, save: bool = False) -> str:
     """Закрити документ за шляхом або назвою. save=True — зберегти перед закриттям."""
-    global currentDoc
     doc = swApp.GetFirstDocument()
     while doc is not None:
         if doc.GetPathName() == path or doc.GetTitle() == path:
@@ -92,8 +93,6 @@ def sw_close_document(path: str, save: bool = False) -> str:
             if save:
                 doc.Save3(1, 0, 0)
             swApp.CloseDoc(doc.GetPathName() or title)
-            if currentDoc and (currentDoc.GetPathName() == path or currentDoc.GetTitle() == path):
-                currentDoc = None
             return f"Закрито: {title}"
         doc = doc.GetNext()
     return f"Документ не знайдено: {path}"
@@ -105,7 +104,6 @@ def sw_close_document(path: str, save: bool = False) -> str:
 @mcp.tool()
 def sw_new_part() -> str:
     """Створити нову деталь."""
-    global currentDoc
     path = ""
     try:
         path = swApp.GetUserPreferenceStringValue(9)
@@ -122,7 +120,7 @@ def sw_new_part() -> str:
         path = next((p for p in candidates if os.path.exists(p)), "")
     if not path:
         raise FileNotFoundError("Шаблон Part.prtdot не знайдено. Перевірте Інструменти → Параметри → Розташування файлів → Шаблони документів")
-    currentDoc = swApp.NewDocument(path, 0, 0, 0)
+    swApp.NewDocument(path, 0, 0, 0)
     return "Нова деталь створена"
 
 @mcp.tool()
@@ -136,20 +134,19 @@ def sw_set_material(material: str) -> str:
         r"C:\Program Files\SolidWorks Corp\SolidWorks\lang\english\sldmaterials\solidworks materials.sldmat",
     ]
     db = next((p for p in db_candidates if os.path.exists(p)), "solidworks materials.sldmat")
-    currentDoc.SetMaterialPropertyName2("Default", db, material)
+    _doc().SetMaterialPropertyName2("Default", db, material)
     return f"Матеріал: {material}"
 
 @mcp.tool()
 def sw_save(filepath: str) -> str:
     """Зберегти поточний документ."""
-    currentDoc.SaveAs3(filepath, 0, 2)
+    _doc().SaveAs3(filepath, 0, 2)
     return f"Збережено: {filepath}"
 
 @mcp.tool()
 def sw_get_mass_properties() -> str:
     """Отримати масо-інерційні характеристики поточної деталі."""
-    ext = currentDoc.Extension
-    mp = ext.CreateMassProperty2()
+    mp = _doc().Extension.CreateMassProperty2()
     if mp is None:
         return "Не вдалось отримати масо-інерційні характеристики."
     mass = mp.Mass
@@ -168,7 +165,7 @@ def sw_get_mass_properties() -> str:
 @mcp.tool()
 def sw_list_features() -> str:
     """Показати список features поточного документа."""
-    feat = currentDoc.FirstFeature()
+    feat = _doc().FirstFeature()
     if feat is None:
         return "Немає features."
     lines = []
@@ -183,7 +180,7 @@ def sw_list_features() -> str:
 @mcp.tool()
 def sw_suppress_feature(name: str) -> str:
     """Придушити feature за назвою."""
-    feat = currentDoc.FirstFeature()
+    feat = _doc().FirstFeature()
     while feat is not None:
         if feat.Name == name:
             feat.SetSuppression2(0, 2, None)
@@ -194,7 +191,7 @@ def sw_suppress_feature(name: str) -> str:
 @mcp.tool()
 def sw_unsuppress_feature(name: str) -> str:
     """Зняти придушення з feature за назвою."""
-    feat = currentDoc.FirstFeature()
+    feat = _doc().FirstFeature()
     while feat is not None:
         if feat.Name == name:
             feat.SetSuppression2(1, 2, None)
@@ -205,7 +202,7 @@ def sw_unsuppress_feature(name: str) -> str:
 @mcp.tool()
 def sw_rebuild() -> str:
     """Перебудувати поточний документ (Ctrl+B)."""
-    result = currentDoc.ForceRebuild3(False)
+    result = _doc().ForceRebuild3(False)
     return "Rebuild виконано." if result else "Rebuild завершено з попередженнями."
 
 # ─────────────────────────────────────────
@@ -220,37 +217,34 @@ def sw_base_flange(
     bend_radius_mm: float = 1.0
 ) -> str:
     """Створити базовий фланець листового металу."""
-    currentDoc.Extension.SelectByID2(
-        "Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0
-    )
-    currentDoc.SketchManager.InsertSketch(True)
+    doc = _doc()
+    doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
+    doc.SketchManager.InsertSketch(True)
     w = width_mm / 1000
     h = height_mm / 1000
-    currentDoc.SketchManager.CreateCenterRectangle(0, 0, 0, w/2, h/2, 0)
-    currentDoc.FeatureManager.InsertSheetMetalBaseFlange2(
+    doc.SketchManager.CreateCenterRectangle(0, 0, 0, w/2, h/2, 0)
+    doc.FeatureManager.InsertSheetMetalBaseFlange2(
         thickness_mm / 1000,   # Thickness
         False,                 # bFlipSide
         bend_radius_mm / 1000, # BendRadius
-        0,                     # BendAllowanceType (Long)
-        0.0,                   # BendAllowanceValue (Double)
-        True,                  # bUseDefaultRelief (Boolean)
-        0,                     # ReliefType (Long)
-        False,                 # bUseReliefRatio (Boolean)
-        0.0,                   # dReliefRatio (Double)
-        0.0,                   # dReliefWidth (Double)
-        0.0,                   # dReliefDepth (Double)
-        False,                 # bAutoReliefRatio (Boolean)
-        "",                    # GaugeTable (String)
-        False                  # bDirection (Boolean)
+        0,                     # BendAllowanceType
+        0.0,                   # BendAllowanceValue
+        True,                  # bUseDefaultRelief
+        0,                     # ReliefType
+        False,                 # bUseReliefRatio
+        0.0,                   # dReliefRatio
+        0.0,                   # dReliefWidth
+        0.0,                   # dReliefDepth
+        False,                 # bAutoReliefRatio
+        "",                    # GaugeTable
+        False                  # bDirection
     )
     return f"Фланець: {width_mm}×{height_mm}×{thickness_mm}мм R{bend_radius_mm}"
 
 @mcp.tool()
 def sw_export_dxf(filepath: str) -> str:
     """Експортувати розгортку Sheet Metal як DXF."""
-    currentDoc.ExportToDWG2(
-        filepath, "", 1, True, None, False, False, 0, None
-    )
+    _doc().ExportToDWG2(filepath, "", 1, True, None, False, False, 0, None)
     return f"DXF збережено: {filepath}"
 
 # ─────────────────────────────────────────
@@ -266,13 +260,13 @@ def sw_export_stl(filepath: str, quality: str = "fine") -> str:
     q = 1 if quality == "fine" else 0
     swApp.SetUserPreferenceIntegerValue(57, q)
     swApp.SetUserPreferenceIntegerValue(56, 0)
-    currentDoc.SaveAs3(filepath, 0, 2)
+    _doc().SaveAs3(filepath, 0, 2)
     return f"STL збережено: {filepath}"
 
 @mcp.tool()
 def sw_export_3mf(filepath: str) -> str:
     """Експорт 3MF для Bambu Studio."""
-    currentDoc.SaveAs3(filepath, 0, 2)
+    _doc().SaveAs3(filepath, 0, 2)
     return f"3MF збережено: {filepath}"
 
 # ─────────────────────────────────────────
