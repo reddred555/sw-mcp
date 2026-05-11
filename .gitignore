@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 *.pyo
 artcam_macros/
+.claude/settings.local.json
