@@ -160,6 +160,21 @@ def sw_get_mass_properties() -> str:
         f"ЦМ:       X={cx*1000:.3f} Y={cy*1000:.3f} Z={cz*1000:.3f} мм"
     )
 
+@mcp.tool()
+def sw_list_features() -> str:
+    """Показати список features поточного документа."""
+    feat = currentDoc.FirstFeature()
+    if feat is None:
+        return "Немає features."
+    lines = []
+    while feat is not None:
+        name = feat.Name
+        ftype = feat.GetTypeName2()
+        suppressed = " [придушено]" if feat.IsSuppressed2(0, None) else ""
+        lines.append(f"{ftype}: {name}{suppressed}")
+        feat = feat.GetNextFeature()
+    return "\n".join(lines)
+
 # ─────────────────────────────────────────
 # SOLIDWORKS — SHEET METAL
 # ─────────────────────────────────────────
