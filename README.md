@@ -29,6 +29,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_new_part()` | Створити нову деталь |
 | `sw_set_material(material)` | Встановити матеріал (`AISI 304`, `Aluminum 6061`, ...) |
 | `sw_save(filepath)` | Зберегти документ |
+| `sw_get_mass_properties()` | Маса, об'єм, площа, щільність, центр мас |
 
 ### SolidWorks — Sheet Metal
 | Інструмент | Опис |
