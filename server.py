@@ -175,6 +175,28 @@ def sw_list_features() -> str:
     return "\n".join(lines)
 
 @mcp.tool()
+def sw_suppress_feature(name: str) -> str:
+    """Придушити feature за назвою."""
+    feat = currentDoc.FirstFeature()
+    while feat is not None:
+        if feat.Name == name:
+            feat.SetSuppression2(0, 2, None)
+            return f"Придушено: {name}"
+        feat = feat.GetNextFeature()
+    return f"Feature не знайдено: {name}"
+
+@mcp.tool()
+def sw_unsuppress_feature(name: str) -> str:
+    """Зняти придушення з feature за назвою."""
+    feat = currentDoc.FirstFeature()
+    while feat is not None:
+        if feat.Name == name:
+            feat.SetSuppression2(1, 2, None)
+            return f"Активовано: {name}"
+        feat = feat.GetNextFeature()
+    return f"Feature не знайдено: {name}"
+
+@mcp.tool()
 def sw_rebuild() -> str:
     """Перебудувати поточний документ (Ctrl+B)."""
     result = currentDoc.ForceRebuild3(False)
