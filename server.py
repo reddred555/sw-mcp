@@ -131,9 +131,12 @@ def sw_set_material(material: str) -> str:
     Встановити матеріал.
     Приклади: 'AISI 304' / 'Plain Carbon Steel' / 'Aluminum 6061'
     """
-    currentDoc.SetMaterialPropertyName2(
-        "Default", "solidworks materials.sldmat", material
-    )
+    db_candidates = [
+        r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\lang\english\sldmaterials\solidworks materials.sldmat",
+        r"C:\Program Files\SolidWorks Corp\SolidWorks\lang\english\sldmaterials\solidworks materials.sldmat",
+    ]
+    db = next((p for p in db_candidates if os.path.exists(p)), "solidworks materials.sldmat")
+    currentDoc.SetMaterialPropertyName2("Default", db, material)
     return f"Матеріал: {material}"
 
 @mcp.tool()
