@@ -68,6 +68,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_list_configurations()` | Список усіх конфігурацій |
 | `sw_add_configuration(name, description)` | Додати нову конфігурацію |
 | `sw_switch_configuration(name)` | Активувати конфігурацію |
+| `sw_rename_configuration(old_name, new_name)` | Перейменувати конфігурацію |
 | `sw_delete_configuration(name)` | Видалити конфігурацію |
 
 ### SolidWorks — Sheet Metal

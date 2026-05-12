@@ -650,6 +650,15 @@ def sw_switch_configuration(name: str) -> str:
     return f"Активовано конфігурацію: {name}"
 
 @mcp.tool()
+def sw_rename_configuration(old_name: str, new_name: str) -> str:
+    """Перейменувати конфігурацію за назвою."""
+    config = _doc().GetConfigurationByName(old_name)
+    if config is None:
+        return f"Конфігурацію не знайдено: {old_name}"
+    config.Name = new_name
+    return f"Конфігурацію перейменовано: '{old_name}' → '{new_name}'"
+
+@mcp.tool()
 def sw_delete_configuration(name: str) -> str:
     """Видалити конфігурацію."""
     if not _doc().DeleteConfiguration(name):
