@@ -973,6 +973,19 @@ def sw_add_drawing_view(
     return f"Вид '{view_type}' додано на [{x_mm}, {y_mm}]мм"
 
 @mcp.tool()
+def sw_rename_sheet(old_name: str, new_name: str) -> str:
+    """Перейменувати аркуш креслення за назвою."""
+    doc = _doc()
+    try:
+        sheet = doc.Sheet(old_name)
+    except Exception:
+        return "Це не креслення або документ не підтримує аркуші."
+    if sheet is None:
+        return f"Аркуш не знайдено: {old_name}"
+    sheet.SheetName = new_name
+    return f"Аркуш перейменовано: '{old_name}' → '{new_name}'"
+
+@mcp.tool()
 def sw_rename_drawing_view(old_name: str, new_name: str) -> str:
     """Перейменувати вид на активному кресленні за назвою."""
     doc = _doc()
