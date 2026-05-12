@@ -451,6 +451,61 @@ def sw_circular_pattern(count: int, angle_deg: float = 360.0) -> str:
     return f"Circular Pattern: {count} екз. на {angle_deg}°"
 
 # ─────────────────────────────────────────
+# SOLIDWORKS — ЕСКІЗ
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_sketch_start(plane: str = "Front Plane") -> str:
+    """
+    Увійти в режим ескізу на вказаній площині.
+    plane: 'Front Plane' / 'Top Plane' / 'Right Plane'
+    """
+    doc = _doc()
+    doc.Extension.SelectByID2(plane, "PLANE", 0, 0, 0, False, 0, None, 0)
+    doc.SketchManager.InsertSketch(True)
+    return f"Ескіз розпочато на '{plane}'"
+
+@mcp.tool()
+def sw_sketch_line(x1_mm: float, y1_mm: float, x2_mm: float, y2_mm: float) -> str:
+    """Намалювати лінію в активному ескізі."""
+    _doc().SketchManager.CreateLine(x1_mm/1000, y1_mm/1000, 0, x2_mm/1000, y2_mm/1000, 0)
+    return f"Лінія: ({x1_mm},{y1_mm}) → ({x2_mm},{y2_mm})мм"
+
+@mcp.tool()
+def sw_sketch_circle(cx_mm: float, cy_mm: float, radius_mm: float) -> str:
+    """Намалювати коло в активному ескізі."""
+    cx, cy, r = cx_mm/1000, cy_mm/1000, radius_mm/1000
+    _doc().SketchManager.CreateCircle(cx, cy, 0, cx + r, cy, 0)
+    return f"Коло: центр ({cx_mm},{cy_mm}) R{radius_mm}мм"
+
+@mcp.tool()
+def sw_sketch_arc(
+    cx_mm: float,
+    cy_mm: float,
+    radius_mm: float,
+    start_deg: float,
+    end_deg: float,
+) -> str:
+    """
+    Намалювати дугу в активному ескізі.
+    start_deg / end_deg — кути від осі X (проти годинникової стрілки).
+    """
+    import math
+    cx, cy, r = cx_mm/1000, cy_mm/1000, radius_mm/1000
+    sx = cx + r * math.cos(math.radians(start_deg))
+    sy = cy + r * math.sin(math.radians(start_deg))
+    ex = cx + r * math.cos(math.radians(end_deg))
+    ey = cy + r * math.sin(math.radians(end_deg))
+    _doc().SketchManager.CreateArc(cx, cy, 0, sx, sy, 0, ex, ey, 0, 1)
+    return f"Дуга: центр ({cx_mm},{cy_mm}) R{radius_mm}мм {start_deg}°→{end_deg}°"
+
+@mcp.tool()
+def sw_sketch_finish() -> str:
+    """Вийти з режиму ескізу (зберегти ескіз)."""
+    _doc().SketchManager.InsertSketch(True)
+    return "Ескіз завершено"
+
+# ─────────────────────────────────────────
 # SOLIDWORKS — SHEET METAL
 # ─────────────────────────────────────────
 
@@ -529,6 +584,141 @@ def sw_export_3mf(filepath: str) -> str:
     """Експорт 3MF для Bambu Studio."""
     _doc().SaveAs3(filepath, 0, 2)
     return f"3MF збережено: {filepath}"
+
+@mcp.tool()
+def sw_export_step(filepath: str) -> str:
+    """Експортувати деталь/збірку як STEP (.step / .stp)."""
+    _doc().SaveAs3(filepath, 0, 2)
+    return f"STEP збережено: {filepath}"
+
+@mcp.tool()
+def sw_export_iges(filepath: str) -> str:
+    """Експортувати деталь/збірку як IGES (.iges / .igs)."""
+    _doc().SaveAs3(filepath, 0, 2)
+    return f"IGES збережено: {filepath}"
+
+@mcp.tool()
+def sw_export_pdf(filepath: str) -> str:
+    """Експортувати активне креслення як PDF."""
+    _doc().SaveAs3(filepath, 0, 2)
+    return f"PDF збережено: {filepath}"
+
+# ─────────────────────────────────────────
+# SOLIDWORKS — ЗБІРКА
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_new_assembly() -> str:
+    """Створити нову збірку."""
+    app = _sw()
+    path = ""
+    try:
+        path = app.GetUserPreferenceStringValue(11)
+    except Exception:
+        pass
+    if not path or not os.path.exists(path):
+        candidates = [
+            r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2022\templates\Assembly.ASMDOT",
+            r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2023\templates\Assembly.ASMDOT",
+            r"C:\ProgramData\SolidWorks\SolidWorks 2022\templates\Assembly.asmdot",
+        ]
+        path = next((p for p in candidates if os.path.exists(p)), "")
+    if not path:
+        raise FileNotFoundError("Шаблон Assembly.asmdot не знайдено. Перевірте Інструменти → Параметри → Розташування файлів → Шаблони документів")
+    app.NewDocument(path, 0, 0, 0)
+    return "Нова збірка створена"
+
+@mcp.tool()
+def sw_add_component(
+    part_path: str,
+    x_mm: float = 0.0,
+    y_mm: float = 0.0,
+    z_mm: float = 0.0,
+) -> str:
+    """
+    Додати деталь або підзбірку до активної збірки.
+    part_path — повний шлях до .sldprt або .sldasm
+    """
+    if not os.path.exists(part_path):
+        return f"Файл не знайдено: {part_path}"
+    comp = _doc().AddComponent5(part_path, 0, "", False, "", x_mm/1000, y_mm/1000, z_mm/1000)
+    if comp is None:
+        raise RuntimeError(f"Не вдалось додати компонент: {part_path}")
+    return f"Додано: {os.path.basename(part_path)} [{x_mm}, {y_mm}, {z_mm}]мм"
+
+@mcp.tool()
+def sw_add_mate(mate_type: str = "coincident") -> str:
+    """
+    Додати спряження між двома виділеними сутностями (грані/ребра).
+    Виділіть дві сутності в SolidWorks перед викликом.
+    mate_type: 'coincident' / 'parallel' / 'perpendicular' / 'concentric' / 'tangent'
+    """
+    mate_map = {
+        "coincident": 0,
+        "parallel": 1,
+        "perpendicular": 2,
+        "tangent": 3,
+        "concentric": 4,
+        "distance": 5,
+        "angle": 6,
+    }
+    t = mate_map.get(mate_type.lower(), 0)
+    mate = _doc().FeatureManager.InsertMate5(
+        t, False, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, False, False, 0
+    )
+    if mate is None:
+        raise RuntimeError("Спряження не вдалось. Виділіть дві сутності і спробуйте знову.")
+    return f"Спряження '{mate_type}' додано."
+
+# ─────────────────────────────────────────
+# SOLIDWORKS — КРЕСЛЕННЯ
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_new_drawing() -> str:
+    """Створити нове креслення."""
+    app = _sw()
+    path = ""
+    try:
+        path = app.GetUserPreferenceStringValue(12)
+    except Exception:
+        pass
+    if not path or not os.path.exists(path):
+        candidates = [
+            r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2022\templates\Drawing.DRWDOT",
+            r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2023\templates\Drawing.DRWDOT",
+            r"C:\ProgramData\SolidWorks\SolidWorks 2022\templates\Drawing.drwdot",
+        ]
+        path = next((p for p in candidates if os.path.exists(p)), "")
+    if not path:
+        raise FileNotFoundError("Шаблон Drawing.drwdot не знайдено. Перевірте Інструменти → Параметри → Розташування файлів → Шаблони документів")
+    app.NewDocument(path, 0, 0, 0)
+    return "Нове креслення створено"
+
+@mcp.tool()
+def sw_add_drawing_view(
+    model_path: str,
+    view_type: str = "front",
+    x_mm: float = 100.0,
+    y_mm: float = 150.0,
+) -> str:
+    """
+    Додати вид моделі на активне креслення.
+    model_path — шлях до .sldprt або .sldasm
+    view_type:  'front' / 'top' / 'right' / 'isometric'
+    x_mm, y_mm — позиція виду на аркуші
+    """
+    view_map = {
+        "front":     "*Front",
+        "top":       "*Top",
+        "right":     "*Right",
+        "isometric": "*Isometric",
+    }
+    view_name = view_map.get(view_type.lower(), "*Front")
+    view = _doc().CreateDrawViewFromModelView3(model_path, view_name, x_mm/1000, y_mm/1000, 0)
+    if view is None:
+        raise RuntimeError("Не вдалось створити вид. Переконайтесь що модель відкрита.")
+    return f"Вид '{view_type}' додано на [{x_mm}, {y_mm}]мм"
 
 # ─────────────────────────────────────────
 # ARTCAM 2012 — ФРЕЗЕРУВАННЯ
