@@ -419,5 +419,139 @@ def pipeline_milling(
 → Після виконання: artcam_post_wdmax("{nc}")"""
 
 # ─────────────────────────────────────────
+# DXF ДІАГНОСТИКА
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def analyze_dxf(filepath: str) -> str:
+    """
+    Аналіз DXF-файлу: підрахунок примітивів, габарити, кола, перевірка.
+    Підтримує ASCII DXF (AutoCAD R2000+, SolidWorks export).
+    """
+    if not os.path.exists(filepath):
+        return f"Файл не знайдено: {filepath}"
+
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            lines = [l.rstrip("\n\r") for l in f]
+    except OSError as exc:
+        return f"Помилка читання: {exc}"
+
+    # Parse group-code pairs
+    pairs = []
+    i = 0
+    while i + 1 < len(lines):
+        try:
+            code = int(lines[i].strip())
+        except ValueError:
+            i += 1
+            continue
+        pairs.append((code, lines[i + 1].strip()))
+        i += 2
+
+    # Locate ENTITIES section
+    in_entities = False
+    entity_pairs = []
+    j = 0
+    while j < len(pairs):
+        code, val = pairs[j]
+        if code == 0 and val == "SECTION":
+            if j + 1 < len(pairs) and pairs[j + 1] == (2, "ENTITIES"):
+                in_entities = True
+                j += 2
+                continue
+        if in_entities:
+            if code == 0 and val == "ENDSEC":
+                break
+            entity_pairs.append((code, val))
+        j += 1
+
+    if not entity_pairs:
+        return f"Секція ENTITIES не знайдена або порожня: {filepath}"
+
+    # Walk entities
+    counts: dict[str, int] = {}
+    circles: list[dict] = []
+    xs: list[float] = []
+    ys: list[float] = []
+    lines_geom: list[dict] = []
+
+    current: dict | None = None
+    for code, val in entity_pairs:
+        if code == 0:
+            if current is not None:
+                _finalize_entity(current, circles, lines_geom, xs, ys)
+            etype = val
+            counts[etype] = counts.get(etype, 0) + 1
+            current = {"type": etype}
+        elif current is not None:
+            _store_coord(current, code, val, xs, ys)
+    if current is not None:
+        _finalize_entity(current, circles, lines_geom, xs, ys)
+
+    # Build report
+    total = sum(counts.values())
+    lines_out = [f"DXF: {os.path.basename(filepath)}", f"Всього примітивів: {total}", ""]
+
+    lines_out.append("Типи:")
+    for etype, cnt in sorted(counts.items()):
+        lines_out.append(f"  {etype}: {cnt}")
+
+    if xs and ys:
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        lines_out.append(f"\nГабарит (XY): {x1 - x0:.3f} × {y1 - y0:.3f} мм")
+        lines_out.append(f"  X [{x0:.3f} … {x1:.3f}]")
+        lines_out.append(f"  Y [{y0:.3f} … {y1:.3f}]")
+
+    if circles:
+        lines_out.append(f"\nКола ({len(circles)}):")
+        for c in circles:
+            lines_out.append(f"  R={c['r']:.3f}  cx={c['cx']:.3f}  cy={c['cy']:.3f}")
+
+    if not counts:
+        lines_out.append("\n[!] Геометрія не виявлена")
+
+    return "\n".join(lines_out)
+
+
+def _store_coord(entity: dict, code: int, val: str, xs: list, ys: list) -> None:
+    try:
+        fval = float(val)
+    except ValueError:
+        return
+    entity[code] = fval
+    if code == 10:
+        xs.append(fval)
+    elif code == 20:
+        ys.append(fval)
+    elif code == 11:
+        xs.append(fval)
+    elif code == 21:
+        ys.append(fval)
+    elif code == 40 and entity.get("type") in ("CIRCLE", "ARC"):
+        pass  # radius, handled in finalize
+
+
+def _finalize_entity(entity: dict, circles: list, lines_geom: list, xs: list, ys: list) -> None:
+    etype = entity.get("type")
+    if etype == "CIRCLE":
+        r = entity.get(40, 0.0)
+        cx = entity.get(10, 0.0)
+        cy = entity.get(20, 0.0)
+        circles.append({"r": r, "cx": cx, "cy": cy})
+        # Add bounding box of circle
+        xs.extend([cx - r, cx + r])
+        ys.extend([cy - r, cy + r])
+    elif etype == "ARC":
+        r = entity.get(40, 0.0)
+        cx = entity.get(10, 0.0)
+        cy = entity.get(20, 0.0)
+        # Approximate with center ± radius
+        xs.extend([cx - r, cx + r])
+        ys.extend([cy - r, cy + r])
+
+
+# ─────────────────────────────────────────
 if __name__ == "__main__":
     mcp.run()
