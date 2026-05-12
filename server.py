@@ -80,11 +80,17 @@ def sw_open_document(path: str) -> str:
     """Відкрити документ SW (.sldprt / .sldasm / .slddrw) за повним шляхом."""
     if not os.path.exists(path):
         return f"Файл не знайдено: {path}"
-    errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-    warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-    doc = _sw().OpenDoc6(path, 0, 1, "", errors, warnings)
+    ext = os.path.splitext(path)[1].lower()
+    doc_type = {".sldprt": 1, ".sldasm": 2, ".slddrw": 3}.get(ext, 1)
+    app = _sw()
+    result = app.OpenDoc6(path, doc_type, 1, "", 0, 0)
+    doc = result[0] if isinstance(result, tuple) else result
     if doc is None:
-        return f"Не вдалось відкрити: {path} (errors={errors.value})"
+        active = app.ActiveDoc
+        if active and active.GetPathName() == path:
+            doc = active
+        else:
+            return f"Не вдалось відкрити: {path}"
     return f"Відкрито: {doc.GetTitle()}"
 
 @mcp.tool()
@@ -204,6 +210,227 @@ def sw_unsuppress_feature(name: str) -> str:
             return f"Активовано: {name}"
         feat = feat.GetNextFeature()
     return f"Feature не знайдено: {name}"
+
+@mcp.tool()
+def sw_rename_dimension(old_name: str, new_name: str) -> str:
+    """
+    Перейменувати розмір за повною назвою (наприклад 'D1@Boss-Extrude1').
+    Новою назвою може бути коротка (наприклад 'Width') або повна 'Width@Boss-Extrude1'.
+    """
+    doc = _doc()
+    feat = doc.FirstFeature()
+    while feat is not None:
+        disp_dims = feat.GetDisplayDimensions()
+        if disp_dims:
+            for dd in disp_dims:
+                if dd is None:
+                    continue
+                dim = dd.GetDimension2(0)
+                if dim and dim.Name == old_name:
+                    dim.Name = new_name
+                    return f"Розмір перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Розмір не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_feature(old_name: str, new_name: str) -> str:
+    """Перейменувати feature за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name:
+            feat.Name = new_name
+            return f"Перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Feature не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_sketch(old_name: str, new_name: str) -> str:
+    """Перейменувати ескіз за назвою."""
+    SKETCH_TYPES = {"ProfileFeature", "3DProfileFeature"}
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in SKETCH_TYPES:
+            feat.Name = new_name
+            return f"Ескіз перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Ескіз не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_point(old_name: str, new_name: str) -> str:
+    """Перейменувати точку за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "RefPoint":
+            feat.Name = new_name
+            return f"Точку перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Точку не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_cut_list_item(old_name: str, new_name: str) -> str:
+    """Перейменувати елемент списку вирізів (Cut List Item) за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.GetTypeName2() == "CutListFolder":
+            sub = feat.GetFirstSubFeature()
+            while sub is not None:
+                if sub.Name == old_name and sub.GetTypeName2() == "CutListFolder":
+                    sub.Name = new_name
+                    return f"Елемент списку вирізів перейменовано: '{old_name}' → '{new_name}'"
+                sub = sub.GetNextSubFeature()
+            if feat.Name == old_name:
+                feat.Name = new_name
+                return f"Елемент списку вирізів перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Елемент списку вирізів не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_weld_bead(old_name: str, new_name: str) -> str:
+    """Перейменувати зварний шов (Weld Bead) за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "WeldBeadFeat":
+            feat.Name = new_name
+            return f"Зварний шов перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Зварний шов не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_weldment_profile(old_name: str, new_name: str) -> str:
+    """Перейменувати профіль зварної конструкції (Weldment Structural Member) за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "StructuralMember":
+            feat.Name = new_name
+            return f"Профіль перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Профіль не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_coordinate_system(old_name: str, new_name: str) -> str:
+    """Перейменувати систему координат за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "CoordSys":
+            feat.Name = new_name
+            return f"Систему координат перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Систему координат не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_draft(old_name: str, new_name: str) -> str:
+    """Перейменувати feature Draft (ухил) за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "Draft":
+            feat.Name = new_name
+            return f"Draft перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Draft не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_shell(old_name: str, new_name: str) -> str:
+    """Перейменувати feature Shell за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "Shell":
+            feat.Name = new_name
+            return f"Shell перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Shell не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_mirror(old_name: str, new_name: str) -> str:
+    """Перейменувати дзеркальний feature (Mirror Features / Mirror Bodies) за назвою."""
+    MIRROR_TYPES = {"MirrorSolid", "MirrorFeat", "MirrorPattern"}
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in MIRROR_TYPES:
+            feat.Name = new_name
+            return f"Дзеркальний feature перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Дзеркальний feature не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_pattern(old_name: str, new_name: str) -> str:
+    """Перейменувати масив (Pattern) за назвою (Linear, Circular, Curve, Sketch, Fill, Table, Variable)."""
+    PATTERN_TYPES = {
+        "LPattern", "CirPattern", "CurvePattern", "SketchPattern",
+        "FillPattern", "TablePattern", "VariablePattern",
+    }
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in PATTERN_TYPES:
+            feat.Name = new_name
+            return f"Масив перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Масив не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_curve(old_name: str, new_name: str) -> str:
+    """Перейменувати криву за назвою (Composite, Helix, Projected, Curve Through XYZ)."""
+    CURVE_TYPES = {"CompositeCurve", "CurveInFile", "ProjectedCurve", "HelixFeat", "3DSketchSpline"}
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in CURVE_TYPES:
+            feat.Name = new_name
+            return f"Криву перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Криву не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_axis(old_name: str, new_name: str) -> str:
+    """Перейменувати вісь за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "RefAxis":
+            feat.Name = new_name
+            return f"Вісь перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Вісь не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_plane(old_name: str, new_name: str) -> str:
+    """Перейменувати площину за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "RefPlane":
+            feat.Name = new_name
+            return f"Площину перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Площину не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_surface_body(old_name: str, new_name: str) -> str:
+    """Перейменувати поверхневе тіло (Surface Body) за назвою."""
+    doc = _doc()
+    try:
+        bodies = doc.GetBodies2(1, True)  # 1 = swSheetBody
+    except Exception:
+        return "Це не деталь або поверхневих тіл не знайдено."
+    if not bodies:
+        return "Поверхневих тіл не знайдено."
+    for body in bodies:
+        if body.Name == old_name:
+            body.Name = new_name
+            return f"Поверхневе тіло перейменовано: '{old_name}' → '{new_name}'"
+    return f"Поверхневе тіло не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_body(old_name: str, new_name: str) -> str:
+    """Перейменувати тіло деталі за назвою."""
+    doc = _doc()
+    try:
+        bodies = doc.GetBodies2(0, True)  # 0 = solid bodies
+    except Exception:
+        return "Це не деталь або тіл не знайдено."
+    if not bodies:
+        return "Тіл не знайдено."
+    for body in bodies:
+        if body.Name == old_name:
+            body.Name = new_name
+            return f"Тіло перейменовано: '{old_name}' → '{new_name}'"
+    return f"Тіло не знайдено: {old_name}"
 
 @mcp.tool()
 def sw_rebuild() -> str:
@@ -627,6 +854,30 @@ def sw_switch_configuration(name: str) -> str:
     return f"Активовано конфігурацію: {name}"
 
 @mcp.tool()
+def sw_rename_display_state(old_name: str, new_name: str) -> str:
+    """Перейменувати стан відображення (Display State) за назвою."""
+    doc = _doc()
+    states = doc.Extension.GetDisplayStates()
+    if not states or old_name not in states:
+        return f"Стан відображення не знайдено: {old_name}"
+    feat = doc.FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and "DisplayState" in feat.GetTypeName2():
+            feat.Name = new_name
+            return f"Стан відображення перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Стан відображення знайдено в списку, але не знайдено в дереві: {old_name}"
+
+@mcp.tool()
+def sw_rename_configuration(old_name: str, new_name: str) -> str:
+    """Перейменувати конфігурацію за назвою."""
+    config = _doc().GetConfigurationByName(old_name)
+    if config is None:
+        return f"Конфігурацію не знайдено: {old_name}"
+    config.Name = new_name
+    return f"Конфігурацію перейменовано: '{old_name}' → '{new_name}'"
+
+@mcp.tool()
 def sw_delete_configuration(name: str) -> str:
     """Видалити конфігурацію."""
     if not _doc().DeleteConfiguration(name):
@@ -828,6 +1079,22 @@ def sw_add_component(
     return f"Додано: {os.path.basename(part_path)} [{x_mm}, {y_mm}, {z_mm}]мм"
 
 @mcp.tool()
+def sw_rename_component(old_name: str, new_name: str) -> str:
+    """Перейменувати компонент у збірці за назвою (наприклад 'Part1-1')."""
+    doc = _doc()
+    try:
+        comps = doc.GetComponents(False)
+    except Exception:
+        return "Це не збірка або збірка порожня."
+    if not comps:
+        return "Компонентів не знайдено."
+    for comp in comps:
+        if comp.Name2 == old_name:
+            comp.Name2 = new_name
+            return f"Компонент перейменовано: '{old_name}' → '{new_name}'"
+    return f"Компонент не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_add_mate(mate_type: str = "coincident") -> str:
     """
     Додати спряження між двома виділеними сутностями (грані/ребра).
@@ -850,6 +1117,28 @@ def sw_add_mate(mate_type: str = "coincident") -> str:
     if mate is None:
         raise RuntimeError("Спряження не вдалось. Виділіть дві сутності і спробуйте знову.")
     return f"Спряження '{mate_type}' додано."
+
+@mcp.tool()
+def sw_rename_mate(old_name: str, new_name: str) -> str:
+    """Перейменувати спряження у збірці за назвою."""
+    MATE_TYPES = {
+        "MateCoincident", "MateConcentric", "MateParallel",
+        "MatePerpendicular", "MateTangent", "MateDistanceDim",
+        "MateAngleDim", "MateSymmetric", "MateWidth",
+        "MateLinearCoupler", "MateUniversalJoint", "MateHinge",
+        "MateRackPinion", "MateScrewType", "MateSlot",
+    }
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.GetTypeName2() == "MateGroup":
+            sub = feat.GetFirstSubFeature()
+            while sub is not None:
+                if sub.Name == old_name and sub.GetTypeName2() in MATE_TYPES:
+                    sub.Name = new_name
+                    return f"Спряження перейменовано: '{old_name}' → '{new_name}'"
+                sub = sub.GetNextSubFeature()
+        feat = feat.GetNextFeature()
+    return f"Спряження не знайдено: {old_name}"
 
 @mcp.tool()
 def sw_get_bom() -> str:
@@ -925,6 +1214,155 @@ def sw_add_drawing_view(
     return f"Вид '{view_type}' додано на [{x_mm}, {y_mm}]мм"
 
 @mcp.tool()
+def sw_rename_hole_table(old_name: str, new_name: str) -> str:
+    """Перейменувати таблицю отворів (Hole Table) на кресленні за назвою."""
+    doc = _doc()
+    try:
+        sheet = doc.GetCurrentSheet()
+    except Exception:
+        return "Це не креслення або немає активного аркуша."
+    if sheet is None:
+        return "Немає активного аркуша."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів на аркуші не знайдено."
+    for view in views:
+        annots = view.GetAnnotations()
+        if not annots:
+            continue
+        for annot in annots:
+            if annot.GetType() == 12 and annot.Name == old_name:  # 12 = swHoleTable
+                annot.Name = new_name
+                return f"Таблицю отворів перейменовано: '{old_name}' → '{new_name}'"
+    return f"Таблицю отворів не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_revision_table(old_name: str, new_name: str) -> str:
+    """Перейменувати таблицю ревізій (Revision Table) на кресленні за назвою."""
+    doc = _doc()
+    try:
+        sheet = doc.GetCurrentSheet()
+    except Exception:
+        return "Це не креслення або немає активного аркуша."
+    if sheet is None:
+        return "Немає активного аркуша."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів на аркуші не знайдено."
+    for view in views:
+        annots = view.GetAnnotations()
+        if not annots:
+            continue
+        for annot in annots:
+            if annot.GetType() == 25 and annot.Name == old_name:  # 25 = swRevisionTable
+                annot.Name = new_name
+                return f"Таблицю ревізій перейменовано: '{old_name}' → '{new_name}'"
+    return f"Таблицю ревізій не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_bom(old_name: str, new_name: str) -> str:
+    """Перейменувати таблицю BOM на кресленні за назвою."""
+    doc = _doc()
+    try:
+        sheet = doc.GetCurrentSheet()
+    except Exception:
+        return "Це не креслення або немає активного аркуша."
+    if sheet is None:
+        return "Немає активного аркуша."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів на аркуші не знайдено."
+    for view in views:
+        annots = view.GetAnnotations()
+        if not annots:
+            continue
+        for annot in annots:
+            if annot.GetType() == 1 and annot.Name == old_name:  # 1 = swBOMAnnotation
+                annot.Name = new_name
+                return f"BOM перейменовано: '{old_name}' → '{new_name}'"
+    return f"BOM не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_table(old_name: str, new_name: str) -> str:
+    """
+    Перейменувати таблицю на кресленні за назвою.
+    Підтримує: BOM, General Table, Hole Table, Revision Table, Weld Table.
+    """
+    # swAnnotationType_e: BOM=1, HoleTable=12, RevisionTable=25, WeldTable=34, GeneralTable=37
+    TABLE_TYPES = {1, 12, 25, 34, 37}
+    doc = _doc()
+    try:
+        sheet = doc.GetCurrentSheet()
+    except Exception:
+        return "Це не креслення або немає активного аркуша."
+    if sheet is None:
+        return "Немає активного аркуша."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів на аркуші не знайдено."
+    for view in views:
+        annots = view.GetAnnotations()
+        if not annots:
+            continue
+        for annot in annots:
+            if annot.GetType() in TABLE_TYPES and annot.Name == old_name:
+                annot.Name = new_name
+                return f"Таблицю перейменовано: '{old_name}' → '{new_name}'"
+    return f"Таблицю не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_note(old_name: str, new_name: str) -> str:
+    """Перейменувати нотатку (Note) на кресленні за назвою."""
+    doc = _doc()
+    try:
+        sheet = doc.GetCurrentSheet()
+    except Exception:
+        return "Це не креслення або немає активного аркуша."
+    if sheet is None:
+        return "Немає активного аркуша."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів на аркуші не знайдено."
+    for view in views:
+        annots = view.GetAnnotations()
+        if not annots:
+            continue
+        for annot in annots:
+            if annot.GetType() == 8 and annot.Name == old_name:  # 8 = swNote
+                annot.Name = new_name
+                return f"Нотатку перейменовано: '{old_name}' → '{new_name}'"
+    return f"Нотатку не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_sheet(old_name: str, new_name: str) -> str:
+    """Перейменувати аркуш креслення за назвою."""
+    doc = _doc()
+    try:
+        sheet = doc.Sheet(old_name)
+    except Exception:
+        return "Це не креслення або документ не підтримує аркуші."
+    if sheet is None:
+        return f"Аркуш не знайдено: {old_name}"
+    sheet.SheetName = new_name
+    return f"Аркуш перейменовано: '{old_name}' → '{new_name}'"
+
+@mcp.tool()
+def sw_rename_drawing_view(old_name: str, new_name: str) -> str:
+    """Перейменувати вид на активному кресленні за назвою."""
+    doc = _doc()
+    sheet = doc.GetCurrentSheet()
+    if sheet is None:
+        return "Немає активного аркуша креслення."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів не знайдено на поточному аркуші."
+    for view in views:
+        if view.Name == old_name:
+            view.Name = new_name
+            return f"Вид перейменовано: '{old_name}' → '{new_name}'"
+    return f"Вид не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_add_smart_dimension() -> str:
     """
     Додати Smart Dimension до виділених сутностей на кресленні.
@@ -938,6 +1376,23 @@ def sw_add_smart_dimension() -> str:
 # ─────────────────────────────────────────
 # SOLIDWORKS — СИМУЛЯЦІЯ
 # ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_rename_simulation_study(old_name: str, new_name: str) -> str:
+    """Перейменувати дослідження симуляції за назвою."""
+    try:
+        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+        if cosmos is None:
+            raise RuntimeError("Add-in CosmosWorks не завантажено. Увімкніть SolidWorks Simulation в Інструменти → Add-Ins.")
+        study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(old_name)
+        if study is None:
+            return f"Дослідження не знайдено: {old_name}"
+        study.Name = new_name
+        return f"Дослідження перейменовано: '{old_name}' → '{new_name}'"
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"SW Simulation недоступний: {e}")
 
 @mcp.tool()
 def sw_simulation_setup(study_name: str = "Static 1") -> str:
@@ -1143,6 +1598,140 @@ def pipeline_milling(
 ✓ Macro готовий
 → В ArtCAM: Tools → Run Macro → toolpath.bas
 → Після виконання: artcam_post_wdmax("{nc}")"""
+
+# ─────────────────────────────────────────
+# DXF ДІАГНОСТИКА
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def analyze_dxf(filepath: str) -> str:
+    """
+    Аналіз DXF-файлу: підрахунок примітивів, габарити, кола, перевірка.
+    Підтримує ASCII DXF (AutoCAD R2000+, SolidWorks export).
+    """
+    if not os.path.exists(filepath):
+        return f"Файл не знайдено: {filepath}"
+
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            lines = [l.rstrip("\n\r") for l in f]
+    except OSError as exc:
+        return f"Помилка читання: {exc}"
+
+    # Parse group-code pairs
+    pairs = []
+    i = 0
+    while i + 1 < len(lines):
+        try:
+            code = int(lines[i].strip())
+        except ValueError:
+            i += 1
+            continue
+        pairs.append((code, lines[i + 1].strip()))
+        i += 2
+
+    # Locate ENTITIES section
+    in_entities = False
+    entity_pairs = []
+    j = 0
+    while j < len(pairs):
+        code, val = pairs[j]
+        if code == 0 and val == "SECTION":
+            if j + 1 < len(pairs) and pairs[j + 1] == (2, "ENTITIES"):
+                in_entities = True
+                j += 2
+                continue
+        if in_entities:
+            if code == 0 and val == "ENDSEC":
+                break
+            entity_pairs.append((code, val))
+        j += 1
+
+    if not entity_pairs:
+        return f"Секція ENTITIES не знайдена або порожня: {filepath}"
+
+    # Walk entities
+    counts: dict[str, int] = {}
+    circles: list[dict] = []
+    xs: list[float] = []
+    ys: list[float] = []
+    lines_geom: list[dict] = []
+
+    current: dict | None = None
+    for code, val in entity_pairs:
+        if code == 0:
+            if current is not None:
+                _finalize_entity(current, circles, lines_geom, xs, ys)
+            etype = val
+            counts[etype] = counts.get(etype, 0) + 1
+            current = {"type": etype}
+        elif current is not None:
+            _store_coord(current, code, val, xs, ys)
+    if current is not None:
+        _finalize_entity(current, circles, lines_geom, xs, ys)
+
+    # Build report
+    total = sum(counts.values())
+    lines_out = [f"DXF: {os.path.basename(filepath)}", f"Всього примітивів: {total}", ""]
+
+    lines_out.append("Типи:")
+    for etype, cnt in sorted(counts.items()):
+        lines_out.append(f"  {etype}: {cnt}")
+
+    if xs and ys:
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        lines_out.append(f"\nГабарит (XY): {x1 - x0:.3f} × {y1 - y0:.3f} мм")
+        lines_out.append(f"  X [{x0:.3f} … {x1:.3f}]")
+        lines_out.append(f"  Y [{y0:.3f} … {y1:.3f}]")
+
+    if circles:
+        lines_out.append(f"\nКола ({len(circles)}):")
+        for c in circles:
+            lines_out.append(f"  R={c['r']:.3f}  cx={c['cx']:.3f}  cy={c['cy']:.3f}")
+
+    if not counts:
+        lines_out.append("\n[!] Геометрія не виявлена")
+
+    return "\n".join(lines_out)
+
+
+def _store_coord(entity: dict, code: int, val: str, xs: list, ys: list) -> None:
+    try:
+        fval = float(val)
+    except ValueError:
+        return
+    entity[code] = fval
+    if code == 10:
+        xs.append(fval)
+    elif code == 20:
+        ys.append(fval)
+    elif code == 11:
+        xs.append(fval)
+    elif code == 21:
+        ys.append(fval)
+    elif code == 40 and entity.get("type") in ("CIRCLE", "ARC"):
+        pass  # radius, handled in finalize
+
+
+def _finalize_entity(entity: dict, circles: list, lines_geom: list, xs: list, ys: list) -> None:
+    etype = entity.get("type")
+    if etype == "CIRCLE":
+        r = entity.get(40, 0.0)
+        cx = entity.get(10, 0.0)
+        cy = entity.get(20, 0.0)
+        circles.append({"r": r, "cx": cx, "cy": cy})
+        # Add bounding box of circle
+        xs.extend([cx - r, cx + r])
+        ys.extend([cy - r, cy + r])
+    elif etype == "ARC":
+        r = entity.get(40, 0.0)
+        cx = entity.get(10, 0.0)
+        cy = entity.get(20, 0.0)
+        # Approximate with center ± radius
+        xs.extend([cx - r, cx + r])
+        ys.extend([cy - r, cy + r])
+
 
 # ─────────────────────────────────────────
 if __name__ == "__main__":

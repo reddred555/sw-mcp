@@ -34,6 +34,23 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_rebuild()` | Перебудувати документ (Ctrl+B) |
 | `sw_suppress_feature(name)` | Придушити feature за назвою |
 | `sw_unsuppress_feature(name)` | Зняти придушення з feature за назвою |
+| `sw_rename_dimension(old_name, new_name)` | Перейменувати розмір за назвою (наприклад `D1@Boss-Extrude1`) |
+| `sw_rename_feature(old_name, new_name)` | Перейменувати feature за назвою |
+| `sw_rename_plane(old_name, new_name)` | Перейменувати площину за назвою |
+| `sw_rename_draft(old_name, new_name)` | Перейменувати feature Draft (ухил) за назвою |
+| `sw_rename_shell(old_name, new_name)` | Перейменувати feature Shell за назвою |
+| `sw_rename_mirror(old_name, new_name)` | Перейменувати дзеркальний feature за назвою (Mirror Features / Mirror Bodies) |
+| `sw_rename_pattern(old_name, new_name)` | Перейменувати масив за назвою (Linear, Circular, Curve, Sketch, Fill, Table, Variable) |
+| `sw_rename_curve(old_name, new_name)` | Перейменувати криву за назвою (Composite, Helix, Projected, XYZ) |
+| `sw_rename_axis(old_name, new_name)` | Перейменувати вісь за назвою |
+| `sw_rename_coordinate_system(old_name, new_name)` | Перейменувати систему координат за назвою |
+| `sw_rename_point(old_name, new_name)` | Перейменувати точку за назвою |
+| `sw_rename_weld_bead(old_name, new_name)` | Перейменувати зварний шов за назвою |
+| `sw_rename_weldment_profile(old_name, new_name)` | Перейменувати профіль зварної конструкції за назвою |
+| `sw_rename_cut_list_item(old_name, new_name)` | Перейменувати елемент списку вирізів за назвою |
+| `sw_rename_surface_body(old_name, new_name)` | Перейменувати поверхневе тіло за назвою |
+| `sw_rename_body(old_name, new_name)` | Перейменувати тіло деталі за назвою |
+| `sw_rename_sketch(old_name, new_name)` | Перейменувати ескіз за назвою |
 | `sw_extrude(width_mm, height_mm, depth_mm, plane)` | Прямокутний ескіз + Extrude Boss/Base |
 | `sw_revolve(radius_mm, height_mm, angle_deg, plane)` | Прямокутний профіль + Revolve Boss/Base |
 | `sw_fillet(radius_mm)` | Заокруглити виділені ребра (Feature Fillet) |
@@ -66,6 +83,8 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_list_configurations()` | Список усіх конфігурацій |
 | `sw_add_configuration(name, description)` | Додати нову конфігурацію |
 | `sw_switch_configuration(name)` | Активувати конфігурацію |
+| `sw_rename_display_state(old_name, new_name)` | Перейменувати стан відображення |
+| `sw_rename_configuration(old_name, new_name)` | Перейменувати конфігурацію |
 | `sw_delete_configuration(name)` | Видалити конфігурацію |
 
 ### SolidWorks — Sheet Metal
@@ -90,6 +109,8 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 |---|---|
 | `sw_new_assembly()` | Створити нову збірку |
 | `sw_add_component(part_path, x_mm, y_mm, z_mm)` | Додати деталь або підзбірку |
+| `sw_rename_component(old_name, new_name)` | Перейменувати компонент у збірці (наприклад `Part1-1`) |
+| `sw_rename_mate(old_name, new_name)` | Перейменувати спряження у збірці |
 | `sw_add_mate(mate_type)` | Спряження між виділеними сутностями (`coincident` / `parallel` / ...) |
 | `sw_get_bom()` | BOM зі збірки — перелік компонентів з кількостями |
 
@@ -98,11 +119,19 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 |---|---|
 | `sw_new_drawing()` | Створити нове креслення |
 | `sw_add_drawing_view(model_path, view_type, x_mm, y_mm)` | Додати вид моделі (`front` / `top` / `right` / `isometric`) |
+| `sw_rename_hole_table(old_name, new_name)` | Перейменувати таблицю отворів на кресленні |
+| `sw_rename_revision_table(old_name, new_name)` | Перейменувати таблицю ревізій на кресленні |
+| `sw_rename_bom(old_name, new_name)` | Перейменувати таблицю BOM на кресленні |
+| `sw_rename_table(old_name, new_name)` | Перейменувати таблицю на кресленні (BOM, General, Hole, Revision, Weld) |
+| `sw_rename_note(old_name, new_name)` | Перейменувати нотатку на кресленні |
+| `sw_rename_sheet(old_name, new_name)` | Перейменувати аркуш креслення |
+| `sw_rename_drawing_view(old_name, new_name)` | Перейменувати вид на активному кресленні |
 | `sw_add_smart_dimension()` | Додати розмір до виділених сутностей |
 
 ### SolidWorks — Симуляція
 | Інструмент | Опис |
 |---|---|
+| `sw_rename_simulation_study(old_name, new_name)` | Перейменувати дослідження симуляції |
 | `sw_simulation_setup(study_name)` | Створити статичне дослідження (потребує SW Simulation) |
 | `sw_simulation_run(study_name)` | Запустити розрахунок |
 | `sw_simulation_results(study_name)` | Результати: напруження, переміщення, запас міцності |
