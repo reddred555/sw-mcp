@@ -240,6 +240,24 @@ def sw_rename_point(old_name: str, new_name: str) -> str:
     return f"Точку не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_cut_list_item(old_name: str, new_name: str) -> str:
+    """Перейменувати елемент списку вирізів (Cut List Item) за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.GetTypeName2() == "CutListFolder":
+            sub = feat.GetFirstSubFeature()
+            while sub is not None:
+                if sub.Name == old_name and sub.GetTypeName2() == "CutListFolder":
+                    sub.Name = new_name
+                    return f"Елемент списку вирізів перейменовано: '{old_name}' → '{new_name}'"
+                sub = sub.GetNextSubFeature()
+            if feat.Name == old_name:
+                feat.Name = new_name
+                return f"Елемент списку вирізів перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Елемент списку вирізів не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_weldment_profile(old_name: str, new_name: str) -> str:
     """Перейменувати профіль зварної конструкції (Weldment Structural Member) за назвою."""
     feat = _doc().FirstFeature()
