@@ -117,6 +117,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 ### SolidWorks — Симуляція
 | Інструмент | Опис |
 |---|---|
+| `sw_rename_simulation_study(old_name, new_name)` | Перейменувати дослідження симуляції |
 | `sw_simulation_setup(study_name)` | Створити статичне дослідження (потребує SW Simulation) |
 | `sw_simulation_run(study_name)` | Запустити розрахунок |
 | `sw_simulation_results(study_name)` | Результати: напруження, переміщення, запас міцності |

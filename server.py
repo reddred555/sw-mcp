@@ -1128,6 +1128,23 @@ def sw_add_smart_dimension() -> str:
 # ─────────────────────────────────────────
 
 @mcp.tool()
+def sw_rename_simulation_study(old_name: str, new_name: str) -> str:
+    """Перейменувати дослідження симуляції за назвою."""
+    try:
+        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+        if cosmos is None:
+            raise RuntimeError("Add-in CosmosWorks не завантажено. Увімкніть SolidWorks Simulation в Інструменти → Add-Ins.")
+        study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(old_name)
+        if study is None:
+            return f"Дослідження не знайдено: {old_name}"
+        study.Name = new_name
+        return f"Дослідження перейменовано: '{old_name}' → '{new_name}'"
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"SW Simulation недоступний: {e}")
+
+@mcp.tool()
 def sw_simulation_setup(study_name: str = "Static 1") -> str:
     """
     Створити статичне дослідження в SW Simulation.
