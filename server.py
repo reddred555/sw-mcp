@@ -318,6 +318,18 @@ def sw_rename_coordinate_system(old_name: str, new_name: str) -> str:
     return f"Систему координат не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_mirror(old_name: str, new_name: str) -> str:
+    """Перейменувати дзеркальний feature (Mirror Features / Mirror Bodies) за назвою."""
+    MIRROR_TYPES = {"MirrorSolid", "MirrorFeat", "MirrorPattern"}
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in MIRROR_TYPES:
+            feat.Name = new_name
+            return f"Дзеркальний feature перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Дзеркальний feature не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_pattern(old_name: str, new_name: str) -> str:
     """Перейменувати масив (Pattern) за назвою (Linear, Circular, Curve, Sketch, Fill, Table, Variable)."""
     PATTERN_TYPES = {
