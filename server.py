@@ -318,6 +318,18 @@ def sw_rename_coordinate_system(old_name: str, new_name: str) -> str:
     return f"Систему координат не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_curve(old_name: str, new_name: str) -> str:
+    """Перейменувати криву за назвою (Composite, Helix, Projected, Curve Through XYZ)."""
+    CURVE_TYPES = {"CompositeCurve", "CurveInFile", "ProjectedCurve", "HelixFeat", "3DSketchSpline"}
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in CURVE_TYPES:
+            feat.Name = new_name
+            return f"Криву перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Криву не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_axis(old_name: str, new_name: str) -> str:
     """Перейменувати вісь за назвою."""
     feat = _doc().FirstFeature()
