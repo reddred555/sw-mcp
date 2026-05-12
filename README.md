@@ -37,6 +37,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_rename_dimension(old_name, new_name)` | Перейменувати розмір за назвою (наприклад `D1@Boss-Extrude1`) |
 | `sw_rename_feature(old_name, new_name)` | Перейменувати feature за назвою |
 | `sw_rename_plane(old_name, new_name)` | Перейменувати площину за назвою |
+| `sw_rename_pattern(old_name, new_name)` | Перейменувати масив за назвою (Linear, Circular, Curve, Sketch, Fill, Table, Variable) |
 | `sw_rename_curve(old_name, new_name)` | Перейменувати криву за назвою (Composite, Helix, Projected, XYZ) |
 | `sw_rename_axis(old_name, new_name)` | Перейменувати вісь за назвою |
 | `sw_rename_coordinate_system(old_name, new_name)` | Перейменувати систему координат за назвою |

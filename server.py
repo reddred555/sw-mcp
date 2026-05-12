@@ -318,6 +318,21 @@ def sw_rename_coordinate_system(old_name: str, new_name: str) -> str:
     return f"Систему координат не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_pattern(old_name: str, new_name: str) -> str:
+    """Перейменувати масив (Pattern) за назвою (Linear, Circular, Curve, Sketch, Fill, Table, Variable)."""
+    PATTERN_TYPES = {
+        "LPattern", "CirPattern", "CurvePattern", "SketchPattern",
+        "FillPattern", "TablePattern", "VariablePattern",
+    }
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in PATTERN_TYPES:
+            feat.Name = new_name
+            return f"Масив перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Масив не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_curve(old_name: str, new_name: str) -> str:
     """Перейменувати криву за назвою (Composite, Helix, Projected, Curve Through XYZ)."""
     CURVE_TYPES = {"CompositeCurve", "CurveInFile", "ProjectedCurve", "HelixFeat", "3DSketchSpline"}
