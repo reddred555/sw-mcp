@@ -46,7 +46,7 @@ class TestSwListDocuments:
 
             ActiveDoc = active
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
 
     def test_no_documents(self):
         self._setup([])
@@ -115,7 +115,7 @@ class TestSwActivateDocument:
             def ActivateDoc3(self_, path_or_title, silent, opts):
                 return 0  # успіх
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
 
     def test_match_by_path(self):
         doc = _make_doc("part.sldprt", path=r"C:\work\part.sldprt")
@@ -152,7 +152,7 @@ class TestSwCloseDocument:
             def CloseDoc(self_, name):
                 closed.append(name)
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
         return closed
 
     def test_close_by_path(self):

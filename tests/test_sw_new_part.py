@@ -13,7 +13,7 @@ class TestSwNewPart:
             NewDocument = MagicMock()
 
         app = FakeApp()
-        server.swApp = app
+        server._sw = lambda: app
         return app
 
     def test_raises_when_no_template_found(self):
@@ -30,26 +30,26 @@ class TestSwNewPart:
                 mock_new.assert_called_once_with(r"C:\templates\Part.PRTDOT", 0, 0, 0)
 
     def test_falls_back_to_candidate_when_preference_missing(self):
-        self._setup_app(preference_path="")
+        app = self._setup_app(preference_path="")
         candidate = r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2022\templates\Part.PRTDOT"
 
         def exists_side_effect(path):
             return path == candidate
 
         with patch("os.path.exists", side_effect=exists_side_effect):
-            with patch.object(server.swApp, "NewDocument") as mock_new:
+            with patch.object(app, "NewDocument") as mock_new:
                 result = server.sw_new_part()
                 mock_new.assert_called_once_with(candidate, 0, 0, 0)
                 assert "Нова деталь" in result
 
     def test_preference_path_ignored_when_file_not_exist(self):
-        self._setup_app(preference_path=r"C:\missing\Part.PRTDOT")
+        app = self._setup_app(preference_path=r"C:\missing\Part.PRTDOT")
         candidate = r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2022\templates\Part.PRTDOT"
 
         def exists_side_effect(path):
             return path == candidate
 
         with patch("os.path.exists", side_effect=exists_side_effect):
-            with patch.object(server.swApp, "NewDocument") as mock_new:
+            with patch.object(app, "NewDocument") as mock_new:
                 server.sw_new_part()
                 mock_new.assert_called_once_with(candidate, 0, 0, 0)
