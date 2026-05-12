@@ -112,6 +112,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 |---|---|
 | `sw_new_drawing()` | Створити нове креслення |
 | `sw_add_drawing_view(model_path, view_type, x_mm, y_mm)` | Додати вид моделі (`front` / `top` / `right` / `isometric`) |
+| `sw_rename_revision_table(old_name, new_name)` | Перейменувати таблицю ревізій на кресленні |
 | `sw_rename_bom(old_name, new_name)` | Перейменувати таблицю BOM на кресленні |
 | `sw_rename_table(old_name, new_name)` | Перейменувати таблицю на кресленні (BOM, General, Hole, Revision, Weld) |
 | `sw_rename_note(old_name, new_name)` | Перейменувати нотатку на кресленні |

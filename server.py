@@ -1122,6 +1122,29 @@ def sw_add_drawing_view(
     return f"Вид '{view_type}' додано на [{x_mm}, {y_mm}]мм"
 
 @mcp.tool()
+def sw_rename_revision_table(old_name: str, new_name: str) -> str:
+    """Перейменувати таблицю ревізій (Revision Table) на кресленні за назвою."""
+    doc = _doc()
+    try:
+        sheet = doc.GetCurrentSheet()
+    except Exception:
+        return "Це не креслення або немає активного аркуша."
+    if sheet is None:
+        return "Немає активного аркуша."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів на аркуші не знайдено."
+    for view in views:
+        annots = view.GetAnnotations()
+        if not annots:
+            continue
+        for annot in annots:
+            if annot.GetType() == 25 and annot.Name == old_name:  # 25 = swRevisionTable
+                annot.Name = new_name
+                return f"Таблицю ревізій перейменовано: '{old_name}' → '{new_name}'"
+    return f"Таблицю ревізій не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_bom(old_name: str, new_name: str) -> str:
     """Перейменувати таблицю BOM на кресленні за назвою."""
     doc = _doc()
