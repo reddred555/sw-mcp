@@ -18,7 +18,9 @@ def _make_win32_stub():
     pythoncom = types.ModuleType("pythoncom")
     pythoncom.CoInitialize = lambda: None
     pythoncom.VT_BYREF = 0
-    pythoncom.VT_I4 = 0
+    pythoncom.VT_I4 = 3
+    pythoncom.VT_R8 = 5
+    pythoncom.VT_BOOL = 11
     sys.modules["pythoncom"] = pythoncom
 
     fastmcp = types.ModuleType("fastmcp")
