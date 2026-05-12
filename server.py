@@ -206,6 +206,17 @@ def sw_unsuppress_feature(name: str) -> str:
     return f"Feature не знайдено: {name}"
 
 @mcp.tool()
+def sw_rename_feature(old_name: str, new_name: str) -> str:
+    """Перейменувати feature за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name:
+            feat.Name = new_name
+            return f"Перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Feature не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rebuild() -> str:
     """Перебудувати поточний документ (Ctrl+B)."""
     result = _doc().ForceRebuild3(False)
