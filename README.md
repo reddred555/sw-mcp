@@ -93,6 +93,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 |---|---|
 | `sw_new_assembly()` | Створити нову збірку |
 | `sw_add_component(part_path, x_mm, y_mm, z_mm)` | Додати деталь або підзбірку |
+| `sw_rename_component(old_name, new_name)` | Перейменувати компонент у збірці (наприклад `Part1-1`) |
 | `sw_add_mate(mate_type)` | Спряження між виділеними сутностями (`coincident` / `parallel` / ...) |
 | `sw_get_bom()` | BOM зі збірки — перелік компонентів з кількостями |
 

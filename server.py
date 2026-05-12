@@ -860,6 +860,22 @@ def sw_add_component(
     return f"Додано: {os.path.basename(part_path)} [{x_mm}, {y_mm}, {z_mm}]мм"
 
 @mcp.tool()
+def sw_rename_component(old_name: str, new_name: str) -> str:
+    """Перейменувати компонент у збірці за назвою (наприклад 'Part1-1')."""
+    doc = _doc()
+    try:
+        comps = doc.GetComponents(False)
+    except Exception:
+        return "Це не збірка або збірка порожня."
+    if not comps:
+        return "Компонентів не знайдено."
+    for comp in comps:
+        if comp.Name2 == old_name:
+            comp.Name2 = new_name
+            return f"Компонент перейменовано: '{old_name}' → '{new_name}'"
+    return f"Компонент не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_add_mate(mate_type: str = "coincident") -> str:
     """
     Додати спряження між двома виділеними сутностями (грані/ребра).
