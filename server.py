@@ -80,9 +80,11 @@ def sw_open_document(path: str) -> str:
     """Відкрити документ SW (.sldprt / .sldasm / .slddrw) за повним шляхом."""
     if not os.path.exists(path):
         return f"Файл не знайдено: {path}"
+    ext = os.path.splitext(path)[1].lower()
+    doc_type = {".sldprt": 1, ".sldasm": 2, ".slddrw": 3}.get(ext, 1)
     errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
     warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-    doc = _sw().OpenDoc6(path, 0, 1, "", errors, warnings)
+    doc = _sw().OpenDoc6(path, doc_type, 1, "", errors, warnings)
     if doc is None:
         return f"Не вдалось відкрити: {path} (errors={errors.value})"
     return f"Відкрито: {doc.GetTitle()}"
@@ -737,6 +739,21 @@ def sw_switch_configuration(name: str) -> str:
     if not _doc().ShowConfiguration2(name):
         return f"Конфігурацію '{name}' не знайдено."
     return f"Активовано конфігурацію: {name}"
+
+@mcp.tool()
+def sw_rename_display_state(old_name: str, new_name: str) -> str:
+    """Перейменувати стан відображення (Display State) за назвою."""
+    doc = _doc()
+    states = doc.Extension.GetDisplayStates()
+    if not states or old_name not in states:
+        return f"Стан відображення не знайдено: {old_name}"
+    feat = doc.FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and "DisplayState" in feat.GetTypeName2():
+            feat.Name = new_name
+            return f"Стан відображення перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Стан відображення знайдено в списку, але не знайдено в дереві: {old_name}"
 
 @mcp.tool()
 def sw_rename_configuration(old_name: str, new_name: str) -> str:
