@@ -1122,6 +1122,34 @@ def sw_add_drawing_view(
     return f"Вид '{view_type}' додано на [{x_mm}, {y_mm}]мм"
 
 @mcp.tool()
+def sw_rename_table(old_name: str, new_name: str) -> str:
+    """
+    Перейменувати таблицю на кресленні за назвою.
+    Підтримує: BOM, General Table, Hole Table, Revision Table, Weld Table.
+    """
+    # swAnnotationType_e: BOM=1, HoleTable=12, RevisionTable=25, WeldTable=34, GeneralTable=37
+    TABLE_TYPES = {1, 12, 25, 34, 37}
+    doc = _doc()
+    try:
+        sheet = doc.GetCurrentSheet()
+    except Exception:
+        return "Це не креслення або немає активного аркуша."
+    if sheet is None:
+        return "Немає активного аркуша."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів на аркуші не знайдено."
+    for view in views:
+        annots = view.GetAnnotations()
+        if not annots:
+            continue
+        for annot in annots:
+            if annot.GetType() in TABLE_TYPES and annot.Name == old_name:
+                annot.Name = new_name
+                return f"Таблицю перейменовано: '{old_name}' → '{new_name}'"
+    return f"Таблицю не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_note(old_name: str, new_name: str) -> str:
     """Перейменувати нотатку (Note) на кресленні за назвою."""
     doc = _doc()
