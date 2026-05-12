@@ -229,6 +229,17 @@ def sw_rename_sketch(old_name: str, new_name: str) -> str:
     return f"Ескіз не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_plane(old_name: str, new_name: str) -> str:
+    """Перейменувати площину за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "RefPlane":
+            feat.Name = new_name
+            return f"Площину перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Площину не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_body(old_name: str, new_name: str) -> str:
     """Перейменувати тіло деталі за назвою."""
     doc = _doc()
