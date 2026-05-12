@@ -229,6 +229,22 @@ def sw_rename_sketch(old_name: str, new_name: str) -> str:
     return f"Ескіз не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_body(old_name: str, new_name: str) -> str:
+    """Перейменувати тіло деталі за назвою."""
+    doc = _doc()
+    try:
+        bodies = doc.GetBodies2(0, True)  # 0 = solid bodies
+    except Exception:
+        return "Це не деталь або тіл не знайдено."
+    if not bodies:
+        return "Тіл не знайдено."
+    for body in bodies:
+        if body.Name == old_name:
+            body.Name = new_name
+            return f"Тіло перейменовано: '{old_name}' → '{new_name}'"
+    return f"Тіло не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rebuild() -> str:
     """Перебудувати поточний документ (Ctrl+B)."""
     result = _doc().ForceRebuild3(False)
