@@ -82,11 +82,15 @@ def sw_open_document(path: str) -> str:
         return f"Файл не знайдено: {path}"
     ext = os.path.splitext(path)[1].lower()
     doc_type = {".sldprt": 1, ".sldasm": 2, ".slddrw": 3}.get(ext, 1)
-    errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-    warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-    doc = _sw().OpenDoc6(path, doc_type, 1, "", errors, warnings)
+    app = _sw()
+    result = app.OpenDoc6(path, doc_type, 1, "", 0, 0)
+    doc = result[0] if isinstance(result, tuple) else result
     if doc is None:
-        return f"Не вдалось відкрити: {path} (errors={errors.value})"
+        active = app.ActiveDoc
+        if active and active.GetPathName() == path:
+            doc = active
+        else:
+            return f"Не вдалось відкрити: {path}"
     return f"Відкрито: {doc.GetTitle()}"
 
 @mcp.tool()
@@ -279,6 +283,17 @@ def sw_rename_cut_list_item(old_name: str, new_name: str) -> str:
                 return f"Елемент списку вирізів перейменовано: '{old_name}' → '{new_name}'"
         feat = feat.GetNextFeature()
     return f"Елемент списку вирізів не знайдено: {old_name}"
+
+@mcp.tool()
+def sw_rename_weld_bead(old_name: str, new_name: str) -> str:
+    """Перейменувати зварний шов (Weld Bead) за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "WeldBeadFeat":
+            feat.Name = new_name
+            return f"Зварний шов перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Зварний шов не знайдено: {old_name}"
 
 @mcp.tool()
 def sw_rename_weldment_profile(old_name: str, new_name: str) -> str:

@@ -40,6 +40,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_rename_axis(old_name, new_name)` | Перейменувати вісь за назвою |
 | `sw_rename_coordinate_system(old_name, new_name)` | Перейменувати систему координат за назвою |
 | `sw_rename_point(old_name, new_name)` | Перейменувати точку за назвою |
+| `sw_rename_weld_bead(old_name, new_name)` | Перейменувати зварний шов за назвою |
 | `sw_rename_weldment_profile(old_name, new_name)` | Перейменувати профіль зварної конструкції за назвою |
 | `sw_rename_cut_list_item(old_name, new_name)` | Перейменувати елемент списку вирізів за назвою |
 | `sw_rename_body(old_name, new_name)` | Перейменувати тіло деталі за назвою |
