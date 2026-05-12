@@ -318,6 +318,17 @@ def sw_rename_coordinate_system(old_name: str, new_name: str) -> str:
     return f"Систему координат не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_draft(old_name: str, new_name: str) -> str:
+    """Перейменувати feature Draft (ухил) за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "Draft":
+            feat.Name = new_name
+            return f"Draft перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Draft не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_shell(old_name: str, new_name: str) -> str:
     """Перейменувати feature Shell за назвою."""
     feat = _doc().FirstFeature()
