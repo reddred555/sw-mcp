@@ -916,6 +916,28 @@ def sw_add_mate(mate_type: str = "coincident") -> str:
     return f"Спряження '{mate_type}' додано."
 
 @mcp.tool()
+def sw_rename_mate(old_name: str, new_name: str) -> str:
+    """Перейменувати спряження у збірці за назвою."""
+    MATE_TYPES = {
+        "MateCoincident", "MateConcentric", "MateParallel",
+        "MatePerpendicular", "MateTangent", "MateDistanceDim",
+        "MateAngleDim", "MateSymmetric", "MateWidth",
+        "MateLinearCoupler", "MateUniversalJoint", "MateHinge",
+        "MateRackPinion", "MateScrewType", "MateSlot",
+    }
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.GetTypeName2() == "MateGroup":
+            sub = feat.GetFirstSubFeature()
+            while sub is not None:
+                if sub.Name == old_name and sub.GetTypeName2() in MATE_TYPES:
+                    sub.Name = new_name
+                    return f"Спряження перейменовано: '{old_name}' → '{new_name}'"
+                sub = sub.GetNextSubFeature()
+        feat = feat.GetNextFeature()
+    return f"Спряження не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_get_bom() -> str:
     """
     Отримати BOM (перелік компонентів) з активної збірки.
