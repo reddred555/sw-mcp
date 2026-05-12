@@ -42,17 +42,42 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_linear_pattern(spacing_x_mm, count_x, spacing_y_mm, count_y)` | Лінійний масив виділеного feature |
 | `sw_circular_pattern(count, angle_deg)` | Круговий масив виділеного feature + осі |
 
+### SolidWorks — Ескіз
+| Інструмент | Опис |
+|---|---|
+| `sw_sketch_start(plane)` | Увійти в режим ескізу на площині |
+| `sw_sketch_line(x1_mm, y1_mm, x2_mm, y2_mm)` | Намалювати лінію |
+| `sw_sketch_circle(cx_mm, cy_mm, radius_mm)` | Намалювати коло |
+| `sw_sketch_arc(cx_mm, cy_mm, radius_mm, start_deg, end_deg)` | Намалювати дугу |
+| `sw_sketch_finish()` | Вийти з режиму ескізу |
+
 ### SolidWorks — Sheet Metal
 | Інструмент | Опис |
 |---|---|
 | `sw_base_flange(width_mm, height_mm, thickness_mm, bend_radius_mm)` | Створити базовий фланець |
 | `sw_export_dxf(filepath)` | Експортувати розгортку як DXF |
 
-### SolidWorks — 3D Друк
+### SolidWorks — 3D Друк та Експорт
 | Інструмент | Опис |
 |---|---|
 | `sw_export_stl(filepath, quality)` | Експорт STL для Bambu P1S |
 | `sw_export_3mf(filepath)` | Експорт 3MF для Bambu Studio |
+| `sw_export_step(filepath)` | Експорт STEP (.step / .stp) |
+| `sw_export_iges(filepath)` | Експорт IGES (.iges / .igs) |
+| `sw_export_pdf(filepath)` | Експорт PDF (креслення) |
+
+### SolidWorks — Збірка
+| Інструмент | Опис |
+|---|---|
+| `sw_new_assembly()` | Створити нову збірку |
+| `sw_add_component(part_path, x_mm, y_mm, z_mm)` | Додати деталь або підзбірку |
+| `sw_add_mate(mate_type)` | Спряження між виділеними сутностями (`coincident` / `parallel` / ...) |
+
+### SolidWorks — Креслення
+| Інструмент | Опис |
+|---|---|
+| `sw_new_drawing()` | Створити нове креслення |
+| `sw_add_drawing_view(model_path, view_type, x_mm, y_mm)` | Додати вид моделі (`front` / `top` / `right` / `isometric`) |
 
 ### ArtCAM 2012
 | Інструмент | Опис |
