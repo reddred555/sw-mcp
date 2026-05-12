@@ -208,6 +208,27 @@ def sw_unsuppress_feature(name: str) -> str:
     return f"Feature не знайдено: {name}"
 
 @mcp.tool()
+def sw_rename_dimension(old_name: str, new_name: str) -> str:
+    """
+    Перейменувати розмір за повною назвою (наприклад 'D1@Boss-Extrude1').
+    Новою назвою може бути коротка (наприклад 'Width') або повна 'Width@Boss-Extrude1'.
+    """
+    doc = _doc()
+    feat = doc.FirstFeature()
+    while feat is not None:
+        disp_dims = feat.GetDisplayDimensions()
+        if disp_dims:
+            for dd in disp_dims:
+                if dd is None:
+                    continue
+                dim = dd.GetDimension2(0)
+                if dim and dim.Name == old_name:
+                    dim.Name = new_name
+                    return f"Розмір перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Розмір не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_feature(old_name: str, new_name: str) -> str:
     """Перейменувати feature за назвою."""
     feat = _doc().FirstFeature()

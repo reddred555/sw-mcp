@@ -34,6 +34,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_rebuild()` | Перебудувати документ (Ctrl+B) |
 | `sw_suppress_feature(name)` | Придушити feature за назвою |
 | `sw_unsuppress_feature(name)` | Зняти придушення з feature за назвою |
+| `sw_rename_dimension(old_name, new_name)` | Перейменувати розмір за назвою (наприклад `D1@Boss-Extrude1`) |
 | `sw_rename_feature(old_name, new_name)` | Перейменувати feature за назвою |
 | `sw_rename_plane(old_name, new_name)` | Перейменувати площину за назвою |
 | `sw_rename_axis(old_name, new_name)` | Перейменувати вісь за назвою |
