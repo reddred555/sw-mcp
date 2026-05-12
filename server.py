@@ -957,6 +957,22 @@ def sw_add_drawing_view(
     return f"Вид '{view_type}' додано на [{x_mm}, {y_mm}]мм"
 
 @mcp.tool()
+def sw_rename_drawing_view(old_name: str, new_name: str) -> str:
+    """Перейменувати вид на активному кресленні за назвою."""
+    doc = _doc()
+    sheet = doc.GetCurrentSheet()
+    if sheet is None:
+        return "Немає активного аркуша креслення."
+    views = sheet.GetViews()
+    if not views:
+        return "Видів не знайдено на поточному аркуші."
+    for view in views:
+        if view.Name == old_name:
+            view.Name = new_name
+            return f"Вид перейменовано: '{old_name}' → '{new_name}'"
+    return f"Вид не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_add_smart_dimension() -> str:
     """
     Додати Smart Dimension до виділених сутностей на кресленні.

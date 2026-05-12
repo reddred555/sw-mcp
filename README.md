@@ -101,6 +101,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 |---|---|
 | `sw_new_drawing()` | Створити нове креслення |
 | `sw_add_drawing_view(model_path, view_type, x_mm, y_mm)` | Додати вид моделі (`front` / `top` / `right` / `isometric`) |
+| `sw_rename_drawing_view(old_name, new_name)` | Перейменувати вид на активному кресленні |
 | `sw_add_smart_dimension()` | Додати розмір до виділених сутностей |
 
 ### SolidWorks — Симуляція
