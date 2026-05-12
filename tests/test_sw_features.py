@@ -37,7 +37,7 @@ def _setup_doc(*features):
     class FakeApp:
         ActiveDoc = FakeDoc()
 
-    server.swApp = FakeApp()
+    server._sw = lambda: FakeApp()
     if len(features) > 1:
         _chain(*features)
 
@@ -117,7 +117,7 @@ class TestSwListFeatures:
         class FakeApp:
             ActiveDoc = FakeDoc()
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
         result = server.sw_list_features()
         assert result == "Немає features."
 

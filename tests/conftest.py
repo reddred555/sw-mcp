@@ -45,8 +45,8 @@ import server  # noqa: E402  (must come after stubs)
 
 
 @pytest.fixture(autouse=True)
-def reset_swapp():
-    """Скидає глобальний swApp між тестами."""
-    original = server.swApp
+def reset_sw():
+    """Скидає _sw між тестами."""
+    original = server._sw
     yield
-    server.swApp = original
+    server._sw = original
