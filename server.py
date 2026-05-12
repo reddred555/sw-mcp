@@ -217,6 +217,18 @@ def sw_rename_feature(old_name: str, new_name: str) -> str:
     return f"Feature не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_sketch(old_name: str, new_name: str) -> str:
+    """Перейменувати ескіз за назвою."""
+    SKETCH_TYPES = {"ProfileFeature", "3DProfileFeature"}
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() in SKETCH_TYPES:
+            feat.Name = new_name
+            return f"Ескіз перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Ескіз не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rebuild() -> str:
     """Перебудувати поточний документ (Ctrl+B)."""
     result = _doc().ForceRebuild3(False)
