@@ -451,6 +451,51 @@ def sw_circular_pattern(count: int, angle_deg: float = 360.0) -> str:
     return f"Circular Pattern: {count} екз. на {angle_deg}°"
 
 # ─────────────────────────────────────────
+# SOLIDWORKS — SWEEP / LOFT
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_sweep() -> str:
+    """
+    Sweep Boss/Base по виділених профілі та шляху.
+    Виділіть профіль-ескіз, потім шлях-ескіз/ребро в SolidWorks перед викликом.
+    """
+    feat = _doc().FeatureManager.InsertSweep2(
+        True,   # bSolidSweep
+        True,   # bMerge
+        False,  # bUsePath
+        False,  # bUseTangentPropagation
+        0,      # nPathTwistType
+        0.0,    # dPathTwistValue
+        False,  # bBidirectional
+    )
+    if feat is None:
+        raise RuntimeError("Sweep не вдалось. Виділіть профіль і шлях, потім спробуйте знову.")
+    return "Sweep виконано."
+
+@mcp.tool()
+def sw_loft() -> str:
+    """
+    Loft Boss/Base по виділених профілях (мінімум 2 ескізи).
+    Виділіть профілі в SolidWorks перед викликом.
+    """
+    doc = _doc()
+    err1 = err2 = None
+    for method in ("InsertLoftedBoss", "InsertLoftedBoss2"):
+        try:
+            feat = getattr(doc.FeatureManager, method)(
+                True, False, False, True, False, False, 0, False, 0.0, 0.0
+            )
+            if feat is not None:
+                return "Loft виконано."
+        except Exception as e:
+            if method == "InsertLoftedBoss":
+                err1 = repr(e)
+            else:
+                err2 = repr(e)
+    raise RuntimeError(f"Loft не вдалось. Виділіть мінімум 2 профілі. (v1={err1}|v2={err2})")
+
+# ─────────────────────────────────────────
 # SOLIDWORKS — ЕСКІЗ
 # ─────────────────────────────────────────
 
@@ -504,6 +549,89 @@ def sw_sketch_finish() -> str:
     """Вийти з режиму ескізу (зберегти ескіз)."""
     _doc().SketchManager.InsertSketch(True)
     return "Ескіз завершено"
+
+# ─────────────────────────────────────────
+# SOLIDWORKS — ВЛАСТИВОСТІ
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_set_property(name: str, value: str, config: str = "") -> str:
+    """
+    Встановити довільну властивість документа.
+    config: "" = для всіх конфігурацій або назва конфігурації.
+    Приклади: name='PartNo' value='SKU-001'; name='Description' value='Bracket'
+    """
+    _doc().Extension.CustomPropertyManager(config).Set2(name, 30, value)
+    return f"Властивість '{name}' = '{value}'"
+
+@mcp.tool()
+def sw_get_property(name: str, config: str = "") -> str:
+    """Отримати значення властивості документа."""
+    result = _doc().Extension.CustomPropertyManager(config).Get5(name, False)
+    if result is None:
+        return f"Властивість '{name}' не знайдена."
+    ret_val = result[0] if isinstance(result, tuple) else result
+    val = result[2] if isinstance(result, tuple) and len(result) > 2 else (result[1] if isinstance(result, tuple) else "")
+    if ret_val == 0:
+        return f"Властивість '{name}' не знайдена."
+    return f"{name} = {val}"
+
+@mcp.tool()
+def sw_list_properties(config: str = "") -> str:
+    """Показати всі властивості документа."""
+    mgr = _doc().Extension.CustomPropertyManager(config)
+    names = mgr.GetNames()
+    if not names:
+        return "Властивостей немає."
+    lines = []
+    for n in names:
+        result = mgr.Get5(n, False)
+        val = result[2] if isinstance(result, tuple) and len(result) > 2 else ""
+        lines.append(f"{n} = {val}")
+    return "\n".join(lines)
+
+# ─────────────────────────────────────────
+# SOLIDWORKS — КОНФІГУРАЦІЇ
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_list_configurations() -> str:
+    """Показати всі конфігурації документа."""
+    doc = _doc()
+    names = doc.GetConfigurationNames()
+    if not names:
+        return "Конфігурацій немає."
+    try:
+        active = doc.ConfigurationManager.ActiveConfiguration.Name
+    except Exception:
+        active = ""
+    lines = []
+    for name in names:
+        marker = " ← активна" if name == active else ""
+        lines.append(f"• {name}{marker}")
+    return "\n".join(lines)
+
+@mcp.tool()
+def sw_add_configuration(name: str, description: str = "") -> str:
+    """Додати нову конфігурацію."""
+    result = _doc().AddConfiguration2(name, description, "", 128, "")
+    if result is None:
+        raise RuntimeError(f"Не вдалось створити конфігурацію '{name}'")
+    return f"Конфігурацію '{name}' створено."
+
+@mcp.tool()
+def sw_switch_configuration(name: str) -> str:
+    """Активувати конфігурацію за назвою."""
+    if not _doc().ShowConfiguration2(name):
+        return f"Конфігурацію '{name}' не знайдено."
+    return f"Активовано конфігурацію: {name}"
+
+@mcp.tool()
+def sw_delete_configuration(name: str) -> str:
+    """Видалити конфігурацію."""
+    if not _doc().DeleteConfiguration(name):
+        return f"Не вдалось видалити '{name}'. Має бути хоча б одна конфігурація."
+    return f"Конфігурацію '{name}' видалено."
 
 # ─────────────────────────────────────────
 # SOLIDWORKS — SHEET METAL
@@ -562,6 +690,59 @@ def sw_export_dxf(filepath: str) -> str:
     """Експортувати розгортку Sheet Metal як DXF."""
     _doc().ExportToDWG2(filepath, "", 1, True, None, False, False, 0, None)
     return f"DXF збережено: {filepath}"
+
+@mcp.tool()
+def sw_edge_flange(
+    height_mm: float,
+    angle_deg: float = 90.0,
+    bend_radius_mm: float = 1.0,
+) -> str:
+    """
+    Додати відгин (Edge Flange) до виділеного ребра листового металу.
+    Виділіть ребро в SolidWorks перед викликом.
+    angle_deg — кут відгину (90° = перпендикулярно)
+    """
+    import math
+    VR8 = pythoncom.VT_R8
+    VI4 = pythoncom.VT_I4
+    VBL = pythoncom.VT_BOOL
+    V   = win32com.client.VARIANT
+    err = None
+    try:
+        feat = _doc().FeatureManager.InsertSheetMetalEdgeFlange(
+            V(VI4, 0),                          # nEdgeFlangeType: 0=blind
+            V(VR8, height_mm / 1000),           # dHeight
+            V(VI4, 0),                          # nFlangePosType: 0=material inside
+            V(VR8, math.radians(angle_deg)),    # dAngle
+            V(VR8, bend_radius_mm / 1000),      # dBendRadius
+            V(VI4, 0),                          # nBendAllowanceType
+            V(VR8, 0.5),                        # dKFactor
+            V(VBL, True),                       # bAutoReliefRatio
+            V(VI4, 0),                          # nReliefType
+            V(VR8, 0.5),                        # dReliefRatio
+            V(VR8, 0.0),                        # dReliefWidth
+            V(VR8, 0.0),                        # dReliefDepth
+        )
+        if feat is not None:
+            return f"Edge Flange: H{height_mm}мм A{angle_deg}° R{bend_radius_mm}мм"
+    except Exception as e:
+        err = repr(e)
+    raise RuntimeError(f"Edge Flange не вдалось. Виділіть ребро і спробуйте знову. ({err})")
+
+@mcp.tool()
+def sw_flat_pattern(show: bool = True) -> str:
+    """
+    Показати або приховати розгортку листового металу (Flat Pattern).
+    show=True — розгорнути, show=False — згорнути назад.
+    """
+    doc = _doc()
+    feat = doc.FirstFeature()
+    while feat is not None:
+        if feat.GetTypeName2() in ("FlatPattern", "FlatBend"):
+            feat.SetSuppression2(1 if show else 0, 2, None)
+            return f"Розгортка {'показана' if show else 'прихована'}."
+        feat = feat.GetNextFeature()
+    return "Feature 'FlatPattern' не знайдено. Переконайтесь що це Sheet Metal деталь."
 
 # ─────────────────────────────────────────
 # SOLIDWORKS — 3D ДРУК
@@ -670,6 +851,29 @@ def sw_add_mate(mate_type: str = "coincident") -> str:
         raise RuntimeError("Спряження не вдалось. Виділіть дві сутності і спробуйте знову.")
     return f"Спряження '{mate_type}' додано."
 
+@mcp.tool()
+def sw_get_bom() -> str:
+    """
+    Отримати BOM (перелік компонентів) з активної збірки.
+    Повертає таблицю з кількостями та назвами файлів.
+    """
+    from collections import Counter
+    doc = _doc()
+    try:
+        comps = doc.GetComponents(False)  # False = тільки верхній рівень
+    except Exception:
+        return "Це не збірка або збірка порожня."
+    if not comps:
+        return "Компонентів не знайдено."
+    names = [os.path.basename(c.GetPathName()) or c.Name2 for c in comps]
+    counter = Counter(names)
+    lines = [f"{'Поз.':>4}  {'К-ть':>5}  Назва", "-" * 44]
+    for i, (name, qty) in enumerate(sorted(counter.items()), 1):
+        lines.append(f"{i:4}.  {qty:5}x  {name}")
+    lines.append("-" * 44)
+    lines.append(f"Всього: {len(names)} компонентів, {len(counter)} унікальних")
+    return "\n".join(lines)
+
 # ─────────────────────────────────────────
 # SOLIDWORKS — КРЕСЛЕННЯ
 # ─────────────────────────────────────────
@@ -719,6 +923,77 @@ def sw_add_drawing_view(
     if view is None:
         raise RuntimeError("Не вдалось створити вид. Переконайтесь що модель відкрита.")
     return f"Вид '{view_type}' додано на [{x_mm}, {y_mm}]мм"
+
+@mcp.tool()
+def sw_add_smart_dimension() -> str:
+    """
+    Додати Smart Dimension до виділених сутностей на кресленні.
+    Виділіть ребра, точки або геометрію в SolidWorks перед викликом.
+    """
+    dim = _doc().AddSmartDimension()
+    if dim is None:
+        raise RuntimeError("Не вдалось додати розмір. Виділіть геометрію і спробуйте знову.")
+    return "Розмір додано."
+
+# ─────────────────────────────────────────
+# SOLIDWORKS — СИМУЛЯЦІЯ
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_simulation_setup(study_name: str = "Static 1") -> str:
+    """
+    Створити статичне дослідження в SW Simulation.
+    Потребує встановленого додатку SolidWorks Simulation (Інструменти → Add-Ins).
+    """
+    try:
+        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+        if cosmos is None:
+            raise RuntimeError("Add-in CosmosWorks не завантажено. Увімкніть SolidWorks Simulation в Інструменти → Add-Ins.")
+        cw_doc = cosmos.cwDoc(_doc())
+        study = cw_doc.StudyManager().CreateNewStudy3(study_name, 0, 0, None)
+        if study is None:
+            raise RuntimeError("Не вдалось створити дослідження.")
+        return f"Статичне дослідження '{study_name}' створено."
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"SW Simulation недоступний: {e}")
+
+@mcp.tool()
+def sw_simulation_run(study_name: str = "Static 1") -> str:
+    """Запустити розрахунок статичного дослідження."""
+    try:
+        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+        study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name)
+        if study is None:
+            return f"Дослідження '{study_name}' не знайдено. Спочатку викличте sw_simulation_setup."
+        errors = study.RunStudy()
+        return f"Розрахунок '{study_name}' завершено." if not errors else f"Завершено з попередженнями: {errors}"
+    except Exception as e:
+        raise RuntimeError(f"Помилка розрахунку: {e}")
+
+@mcp.tool()
+def sw_simulation_results(study_name: str = "Static 1") -> str:
+    """
+    Отримати результати статичного аналізу:
+    максимальне напруження (von Mises), переміщення, запас міцності.
+    """
+    try:
+        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+        results = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name).Results()
+        stress_data = results.GetResultData2(0, 0, 0, None)   # VON_MISES
+        disp_data   = results.GetResultData2(1, 0, 0, None)   # DISPLACEMENT
+        fos_data    = results.GetResultData2(11, 0, 0, None)  # FACTOR_OF_SAFETY
+        lines = [f"Результати: '{study_name}'"]
+        if stress_data:
+            lines.append(f"Макс. напруження (von Mises): {stress_data.GetMaxValue()/1e6:.2f} МПа")
+        if disp_data:
+            lines.append(f"Макс. переміщення:            {disp_data.GetMaxValue()*1000:.4f} мм")
+        if fos_data:
+            lines.append(f"Мін. запас міцності:          {fos_data.GetMinValue():.2f}")
+        return "\n".join(lines)
+    except Exception as e:
+        raise RuntimeError(f"Помилка отримання результатів: {e}")
 
 # ─────────────────────────────────────────
 # ARTCAM 2012 — ФРЕЗЕРУВАННЯ

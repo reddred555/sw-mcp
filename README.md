@@ -41,6 +41,8 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_hole(diameter_mm, depth_mm, x_mm, y_mm, plane)` | Свердлити отвір (Extruded Cut) |
 | `sw_linear_pattern(spacing_x_mm, count_x, spacing_y_mm, count_y)` | Лінійний масив виділеного feature |
 | `sw_circular_pattern(count, angle_deg)` | Круговий масив виділеного feature + осі |
+| `sw_sweep()` | Sweep Boss/Base по виділених профілі та шляху |
+| `sw_loft()` | Loft Boss/Base по виділених профілях (мін. 2) |
 
 ### SolidWorks — Ескіз
 | Інструмент | Опис |
@@ -51,10 +53,27 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_sketch_arc(cx_mm, cy_mm, radius_mm, start_deg, end_deg)` | Намалювати дугу |
 | `sw_sketch_finish()` | Вийти з режиму ескізу |
 
+### SolidWorks — Властивості
+| Інструмент | Опис |
+|---|---|
+| `sw_set_property(name, value, config)` | Встановити властивість документа (артикул, опис, ...) |
+| `sw_get_property(name, config)` | Отримати значення властивості |
+| `sw_list_properties(config)` | Показати всі властивості |
+
+### SolidWorks — Конфігурації
+| Інструмент | Опис |
+|---|---|
+| `sw_list_configurations()` | Список усіх конфігурацій |
+| `sw_add_configuration(name, description)` | Додати нову конфігурацію |
+| `sw_switch_configuration(name)` | Активувати конфігурацію |
+| `sw_delete_configuration(name)` | Видалити конфігурацію |
+
 ### SolidWorks — Sheet Metal
 | Інструмент | Опис |
 |---|---|
 | `sw_base_flange(width_mm, height_mm, thickness_mm, bend_radius_mm)` | Створити базовий фланець |
+| `sw_edge_flange(height_mm, angle_deg, bend_radius_mm)` | Відгин на виділеному ребрі |
+| `sw_flat_pattern(show)` | Показати/приховати розгортку |
 | `sw_export_dxf(filepath)` | Експортувати розгортку як DXF |
 
 ### SolidWorks — 3D Друк та Експорт
@@ -72,12 +91,21 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_new_assembly()` | Створити нову збірку |
 | `sw_add_component(part_path, x_mm, y_mm, z_mm)` | Додати деталь або підзбірку |
 | `sw_add_mate(mate_type)` | Спряження між виділеними сутностями (`coincident` / `parallel` / ...) |
+| `sw_get_bom()` | BOM зі збірки — перелік компонентів з кількостями |
 
 ### SolidWorks — Креслення
 | Інструмент | Опис |
 |---|---|
 | `sw_new_drawing()` | Створити нове креслення |
 | `sw_add_drawing_view(model_path, view_type, x_mm, y_mm)` | Додати вид моделі (`front` / `top` / `right` / `isometric`) |
+| `sw_add_smart_dimension()` | Додати розмір до виділених сутностей |
+
+### SolidWorks — Симуляція
+| Інструмент | Опис |
+|---|---|
+| `sw_simulation_setup(study_name)` | Створити статичне дослідження (потребує SW Simulation) |
+| `sw_simulation_run(study_name)` | Запустити розрахунок |
+| `sw_simulation_results(study_name)` | Результати: напруження, переміщення, запас міцності |
 
 ### ArtCAM 2012
 | Інструмент | Опис |
@@ -111,3 +139,4 @@ python server.py
 - SolidWorks 2022
 - ArtCAM 2012 (`C:\Program Files\ArtCAM 2012\ArtCAM.exe`)
 - Робоча директорія: `C:\STUKACH\work`
+- SolidWorks Simulation (опційно, для `sw_simulation_*`)
