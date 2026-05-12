@@ -43,6 +43,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_rename_weld_bead(old_name, new_name)` | Перейменувати зварний шов за назвою |
 | `sw_rename_weldment_profile(old_name, new_name)` | Перейменувати профіль зварної конструкції за назвою |
 | `sw_rename_cut_list_item(old_name, new_name)` | Перейменувати елемент списку вирізів за назвою |
+| `sw_rename_surface_body(old_name, new_name)` | Перейменувати поверхневе тіло за назвою |
 | `sw_rename_body(old_name, new_name)` | Перейменувати тіло деталі за назвою |
 | `sw_rename_sketch(old_name, new_name)` | Перейменувати ескіз за назвою |
 | `sw_extrude(width_mm, height_mm, depth_mm, plane)` | Прямокутний ескіз + Extrude Boss/Base |

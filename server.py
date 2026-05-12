@@ -340,6 +340,22 @@ def sw_rename_plane(old_name: str, new_name: str) -> str:
     return f"Площину не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_surface_body(old_name: str, new_name: str) -> str:
+    """Перейменувати поверхневе тіло (Surface Body) за назвою."""
+    doc = _doc()
+    try:
+        bodies = doc.GetBodies2(1, True)  # 1 = swSheetBody
+    except Exception:
+        return "Це не деталь або поверхневих тіл не знайдено."
+    if not bodies:
+        return "Поверхневих тіл не знайдено."
+    for body in bodies:
+        if body.Name == old_name:
+            body.Name = new_name
+            return f"Поверхневе тіло перейменовано: '{old_name}' → '{new_name}'"
+    return f"Поверхневе тіло не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_body(old_name: str, new_name: str) -> str:
     """Перейменувати тіло деталі за назвою."""
     doc = _doc()
