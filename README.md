@@ -34,6 +34,13 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_rebuild()` | Перебудувати документ (Ctrl+B) |
 | `sw_suppress_feature(name)` | Придушити feature за назвою |
 | `sw_unsuppress_feature(name)` | Зняти придушення з feature за назвою |
+| `sw_extrude(width_mm, height_mm, depth_mm, plane)` | Прямокутний ескіз + Extrude Boss/Base |
+| `sw_revolve(radius_mm, height_mm, angle_deg, plane)` | Прямокутний профіль + Revolve Boss/Base |
+| `sw_fillet(radius_mm)` | Заокруглити виділені ребра (Feature Fillet) |
+| `sw_chamfer(distance_mm, angle_deg)` | Фаска на виділених ребрах (Feature Chamfer) |
+| `sw_hole(diameter_mm, depth_mm, x_mm, y_mm, plane)` | Свердлити отвір (Extruded Cut) |
+| `sw_linear_pattern(spacing_x_mm, count_x, spacing_y_mm, count_y)` | Лінійний масив виділеного feature |
+| `sw_circular_pattern(count, angle_deg)` | Круговий масив виділеного feature + осі |
 
 ### SolidWorks — Sheet Metal
 | Інструмент | Опис |
