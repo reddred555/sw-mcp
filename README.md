@@ -37,6 +37,7 @@ SolidWorks → DXF/STL/3MF → ArtCAM → G-code → WDMAX CNC
 | `sw_rename_feature(old_name, new_name)` | Перейменувати feature за назвою |
 | `sw_rename_plane(old_name, new_name)` | Перейменувати площину за назвою |
 | `sw_rename_axis(old_name, new_name)` | Перейменувати вісь за назвою |
+| `sw_rename_coordinate_system(old_name, new_name)` | Перейменувати систему координат за назвою |
 | `sw_rename_body(old_name, new_name)` | Перейменувати тіло деталі за назвою |
 | `sw_rename_sketch(old_name, new_name)` | Перейменувати ескіз за назвою |
 | `sw_extrude(width_mm, height_mm, depth_mm, plane)` | Прямокутний ескіз + Extrude Boss/Base |

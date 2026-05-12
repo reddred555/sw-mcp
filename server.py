@@ -229,6 +229,17 @@ def sw_rename_sketch(old_name: str, new_name: str) -> str:
     return f"Ескіз не знайдено: {old_name}"
 
 @mcp.tool()
+def sw_rename_coordinate_system(old_name: str, new_name: str) -> str:
+    """Перейменувати систему координат за назвою."""
+    feat = _doc().FirstFeature()
+    while feat is not None:
+        if feat.Name == old_name and feat.GetTypeName2() == "CoordSys":
+            feat.Name = new_name
+            return f"Систему координат перейменовано: '{old_name}' → '{new_name}'"
+        feat = feat.GetNextFeature()
+    return f"Систему координат не знайдено: {old_name}"
+
+@mcp.tool()
 def sw_rename_axis(old_name: str, new_name: str) -> str:
     """Перейменувати вісь за назвою."""
     feat = _doc().FirstFeature()
