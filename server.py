@@ -81,15 +81,14 @@ def sw_open_document(path: str) -> str:
     ext = os.path.splitext(path)[1].lower()
     doc_type = {".sldprt": 1, ".sldasm": 2, ".slddrw": 3}.get(ext, 1)
     app = _sw()
-    errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-    warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-    doc = app.OpenDoc6(path, doc_type, 1, "", errors, warnings)
+    result = app.OpenDoc6(path, doc_type, 1, "", 0, 0)
+    doc = result[0] if isinstance(result, tuple) else result
     if doc is None:
         active = app.ActiveDoc
         if active and active.GetPathName() == path:
             doc = active
         else:
-            return f"Не вдалось відкрити: {path} (errors={errors.value}, warnings={warnings.value})"
+            return f"Не вдалось відкрити: {path}"
     return f"Відкрито: {doc.GetTitle()}"
 
 @mcp.tool()
