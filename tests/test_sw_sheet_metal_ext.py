@@ -60,12 +60,14 @@ def _make_feature(ftype, suppressed_calls=None):
     class Feat:
         _next = None
 
+        @property
         def GetTypeName2(self_):
             return ftype
 
         def SetSuppression2(self_, state, cfg, names):
             calls.append(state)
 
+        @property
         def GetNextFeature(self_):
             return self_._next
 
@@ -74,6 +76,7 @@ def _make_feature(ftype, suppressed_calls=None):
 
 def _setup_flat(features):
     class FakeDoc:
+        @property
         def FirstFeature(self_):
             return features[0] if features else None
 

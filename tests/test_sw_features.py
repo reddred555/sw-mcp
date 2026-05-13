@@ -8,6 +8,7 @@ def _make_feature(name, ftype="Boss-Extrude", suppressed=False):
         _next = None
         Name = name
 
+        @property
         def GetTypeName2(self):
             return ftype
 
@@ -17,6 +18,7 @@ def _make_feature(name, ftype="Boss-Extrude", suppressed=False):
         def SetSuppression2(self, state, cfg, names):
             self._last_state = state
 
+        @property
         def GetNextFeature(self):
             return self._next
 
@@ -31,6 +33,7 @@ def _chain(*feats):
 
 def _setup_doc(*features):
     class FakeDoc:
+        @property
         def FirstFeature(self_):
             return features[0] if features else None
 
@@ -111,8 +114,7 @@ class TestSwUnsuppressFeature:
 class TestSwListFeatures:
     def test_no_features(self):
         class FakeDoc:
-            def FirstFeature(self_):
-                return None
+            FirstFeature = None
 
         class FakeApp:
             ActiveDoc = FakeDoc()

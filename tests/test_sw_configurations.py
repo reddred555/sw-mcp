@@ -14,6 +14,7 @@ def _setup_doc(config_names=None, active_name="Default", add_result=None,
     class FakeDoc:
         ConfigurationManager = FakeConfigManager()
 
+        @property
         def GetConfigurationNames(self_):
             return config_names
 
@@ -83,7 +84,7 @@ class TestSwAddConfiguration:
 
         class FakeDoc:
             ConfigurationManager = mocker.MagicMock()
-            def GetConfigurationNames(self_): return []
+            GetConfigurationNames = []
             def AddConfiguration2(self_, name, desc, comment, opts, parent):
                 calls.append(opts)
                 return mocker.MagicMock()

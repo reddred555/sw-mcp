@@ -17,6 +17,7 @@ class FakeMgr:
             return (1, v, v, True)
         return (0, "", "", False)
 
+    @property
     def GetNames(self):
         return list(self._props.keys()) if self._props else None
 

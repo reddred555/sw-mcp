@@ -11,15 +11,19 @@ def _make_doc(title, path="", doc_type=1, is_active=False, unsaved=False):
     _unsaved = unsaved
 
     class Doc:
+        @property
         def GetTitle(self):
             return _title
 
+        @property
         def GetPathName(self):
             return _path
 
+        @property
         def GetType(self):
             return _doc_type
 
+        @property
         def GetSaveFlag(self):
             return not _unsaved
 
@@ -36,8 +40,7 @@ class TestSwListDocuments:
         _active = active
 
         class FakeApp:
-            def GetDocuments(self_):
-                return _docs
+            GetDocuments = _docs
             ActiveDoc = _active
 
         server._sw = lambda: FakeApp()
@@ -101,8 +104,7 @@ class TestSwActivateDocument:
         _docs = docs
 
         class FakeApp:
-            def GetDocuments(self_):
-                return _docs
+            GetDocuments = _docs
 
             def ActivateDoc3(self_, path_or_title, silent, opts, err_ref=None):
                 return 0
@@ -138,8 +140,7 @@ class TestSwCloseDocument:
         closed = []
 
         class FakeApp:
-            def GetDocuments(self_):
-                return _docs
+            GetDocuments = _docs
 
             def CloseDoc(self_, name):
                 closed.append(name)

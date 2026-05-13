@@ -7,6 +7,7 @@ import server
 def _make_comp(path):
     class Comp:
         Name2 = os.path.basename(path) if path else "unknown"
+        @property
         def GetPathName(self_): return path
     return Comp()
 
