@@ -41,14 +41,14 @@ def sw_connect() -> str:
 def sw_list_documents() -> str:
     """Показати всі відкриті документи в SolidWorks."""
     app = _sw()
-    doc = app.GetFirstDocument()
-    if doc is None:
+    docs = app.GetDocuments()
+    if not docs:
         return "Немає відкритих документів."
     doc_types = {1: "Part", 2: "Assembly", 3: "Drawing"}
     active = app.ActiveDoc
     lines = []
     seen = set()
-    while doc is not None:
+    for doc in docs:
         path = doc.GetPathName()
         title = doc.GetTitle()
         key = path or title
@@ -58,21 +58,19 @@ def sw_list_documents() -> str:
             is_active = " ← активний" if active and doc.GetTitle() == active.GetTitle() else ""
             saved = "" if doc.GetSaveFlag() else " [не збережено]"
             lines.append(f"[{doc_type}] {title}{saved}{is_active}\n  {path or '(без шляху)'}")
-        doc = doc.GetNext()
     return "\n".join(lines)
 
 @mcp.tool()
 def sw_activate_document(path: str) -> str:
     """Активувати відкритий документ за шляхом або назвою файлу."""
     app = _sw()
-    doc = app.GetFirstDocument()
-    while doc is not None:
+    for doc in (app.GetDocuments() or []):
         if doc.GetPathName() == path or doc.GetTitle() == path:
-            errors = app.ActivateDoc3(doc.GetPathName() or doc.GetTitle(), False, 0)
-            if errors:
-                return f"Помилка активації: код {errors}"
+            try:
+                app.ActivateDoc3(doc.GetPathName() or doc.GetTitle(), False, 0)
+            except Exception as e:
+                return f"Помилка активації: {e}"
             return f"Активовано: {doc.GetTitle()}"
-        doc = doc.GetNext()
     return f"Документ не знайдено: {path}"
 
 @mcp.tool()
@@ -83,29 +81,28 @@ def sw_open_document(path: str) -> str:
     ext = os.path.splitext(path)[1].lower()
     doc_type = {".sldprt": 1, ".sldasm": 2, ".slddrw": 3}.get(ext, 1)
     app = _sw()
-    result = app.OpenDoc6(path, doc_type, 1, "", 0, 0)
-    doc = result[0] if isinstance(result, tuple) else result
+    errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+    warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+    doc = app.OpenDoc6(path, doc_type, 1, "", errors, warnings)
     if doc is None:
         active = app.ActiveDoc
         if active and active.GetPathName() == path:
             doc = active
         else:
-            return f"Не вдалось відкрити: {path}"
+            return f"Не вдалось відкрити: {path} (errors={errors.value}, warnings={warnings.value})"
     return f"Відкрито: {doc.GetTitle()}"
 
 @mcp.tool()
 def sw_close_document(path: str, save: bool = False) -> str:
     """Закрити документ за шляхом або назвою. save=True — зберегти перед закриттям."""
     app = _sw()
-    doc = app.GetFirstDocument()
-    while doc is not None:
+    for doc in (app.GetDocuments() or []):
         if doc.GetPathName() == path or doc.GetTitle() == path:
             title = doc.GetTitle()
             if save:
                 doc.Save3(1, 0, 0)
             app.CloseDoc(doc.GetPathName() or title)
             return f"Закрито: {title}"
-        doc = doc.GetNext()
     return f"Документ не знайдено: {path}"
 
 # ─────────────────────────────────────────
