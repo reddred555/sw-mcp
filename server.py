@@ -14,6 +14,7 @@ mcp = FastMCP("stukach-sw-mcp")
 ARTCAM_EXE = r"C:\Program Files\ArtCAM 2012\ArtCAM.exe"
 ARTCAM_MACROS = r"C:\STUKACH\sw-mcp\artcam_macros"
 WORK_DIR = r"C:\STUKACH\work"
+DOCS_DIR = r"C:\STUKACH\sw-mcp\docs"
 
 def _sw():
     """Get SolidWorks application from the current thread (safe for FastMCP threading)."""
@@ -1729,6 +1730,17 @@ def _finalize_entity(entity: dict, circles: list, lines_geom: list, xs: list, ys
         xs.extend([cx - r, cx + r])
         ys.extend([cy - r, cy + r])
 
+
+# ─────────────────────────────────────────
+# RESOURCES — проектна документація
+# ─────────────────────────────────────────
+
+@mcp.resource("docs://drever/spec")
+def drever_spec() -> str:
+    """Технічний звіт Drever Ingeniering — LED ручка з touch+mmWave."""
+    path = os.path.join(DOCS_DIR, "drever_ingeniering_v1.md")
+    with open(path, encoding="utf-8") as f:
+        return f.read()
 
 # ─────────────────────────────────────────
 if __name__ == "__main__":
