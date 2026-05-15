@@ -207,8 +207,106 @@ def sw_rebuild() -> str:
     return "Rebuild виконано." if result else "Rebuild завершено з попередженнями."
 
 # ─────────────────────────────────────────
-# SOLIDWORKS — SHEET METAL
+# SOLIDWORKS — ЗБІРКИ (ASSEMBLY)
 # ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_new_assembly() -> str:
+    """Створити новий документ збірки (.sldasm)."""
+    candidates = [
+        r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2022\templates\Assembly.ASMDOT",
+        r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2023\templates\Assembly.ASMDOT",
+        r"C:\ProgramData\SOLIDWORKS\SOLIDWORKS 2024\templates\Assembly.ASMDOT",
+        r"C:\ProgramData\SolidWorks\SolidWorks 2022\templates\Assembly.asmdot",
+    ]
+    try:
+        path = swApp.GetUserPreferenceStringValue(10)
+    except Exception:
+        path = ""
+    if not path or not os.path.exists(path):
+        path = next((p for p in candidates if os.path.exists(p)), "")
+    if not path:
+        raise FileNotFoundError(
+            "Шаблон Assembly.asmdot не знайдено. "
+            "Перевірте Інструменти → Параметри → Розташування файлів → Шаблони документів"
+        )
+    swApp.NewDocument(path, 1, 0, 0)
+    return "Нова збірка створена"
+
+
+@mcp.tool()
+def sw_add_component(
+    part_path: str,
+    x_mm: float = 0.0,
+    y_mm: float = 0.0,
+    z_mm: float = 0.0
+) -> str:
+    """
+    Додати компонент до активної збірки.
+    part_path — повний шлях до .sldprt або .sldasm
+    x_mm, y_mm, z_mm — положення в мм відносно початку координат збірки
+    """
+    if not os.path.exists(part_path):
+        return f"Файл не знайдено: {part_path}"
+    asm = _doc()
+    comp = asm.AddComponent4(part_path, "", x_mm / 1000, y_mm / 1000, z_mm / 1000)
+    if comp is None:
+        return f"Не вдалось додати компонент: {part_path}"
+    return f"Компонент додано: {os.path.basename(part_path)} @ ({x_mm}, {y_mm}, {z_mm}) мм"
+
+
+@mcp.tool()
+def sw_add_mate(
+    mate_type: str,
+    entity1: str,
+    entity2: str
+) -> str:
+    """
+    Додати спряження (mate) між двома об'єктами збірки.
+    mate_type: 'coincident' | 'concentric' | 'parallel' | 'perpendicular' | 'distance' | 'angle'
+    entity1, entity2 — назви компонентів або граней (ім'я компонента)
+    """
+    MATE_TYPES = {
+        "coincident":    0,
+        "concentric":    1,
+        "parallel":      3,
+        "perpendicular": 4,
+        "distance":      5,
+        "angle":         6,
+    }
+    code = MATE_TYPES.get(mate_type.lower())
+    if code is None:
+        return f"Невідомий тип спряження: {mate_type}. Доступні: {', '.join(MATE_TYPES)}"
+    asm = _doc()
+    asm.Extension.SelectByID2(entity1, "FACE", 0, 0, 0, False, 1, None, 0)
+    asm.Extension.SelectByID2(entity2, "FACE", 0, 0, 0, True, 1, None, 0)
+    mate = asm.FeatureManager.InsertMate5(code, False, 0, 0, 0, 0, 0, 0, 0, 0, 0, False, False, 0, 0)
+    if mate is None:
+        return f"Не вдалось створити спряження {mate_type}"
+    return f"Спряження '{mate_type}' між {entity1} ↔ {entity2} додано"
+
+
+@mcp.tool()
+def sw_list_components() -> str:
+    """Показати всі компоненти активної збірки."""
+    asm = _doc()
+    comps = asm.GetComponents(False)
+    if not comps:
+        return "Збірка порожня або не є збіркою."
+    lines = []
+    for comp in comps:
+        name = comp.Name2
+        path = comp.GetPathName()
+        suppressed = " [придушено]" if comp.IsSuppressed() else ""
+        lines.append(f"  {name}{suppressed}\n    {path or '(без шляху)'}")
+    return f"Компонентів: {len(comps)}\n" + "\n".join(lines)
+
+
+@mcp.tool()
+def sw_save_assembly(filepath: str) -> str:
+    """Зберегти активну збірку як .sldasm."""
+    _doc().SaveAs3(filepath, 0, 2)
+    return f"Збірка збережена: {filepath}"
 
 @mcp.tool()
 def sw_base_flange(
