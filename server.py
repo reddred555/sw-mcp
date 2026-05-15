@@ -1906,6 +1906,17 @@ def drever_model_prompt(
 ### Крок 1 — Ініціалізація
 
 # ─────────────────────────────────────────
+# RESOURCES — проектна документація
+# ─────────────────────────────────────────
+
+@mcp.resource("docs://drever/spec")
+def drever_spec() -> str:
+    """Технічний звіт Drever Ingeniering — LED ручка з touch+mmWave."""
+    path = os.path.join(DOCS_DIR, "drever_ingeniering_v1.md")
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+# ─────────────────────────────────────────
 if __name__ == "__main__":
     mcp.run()
 # ─────────────────────────────────────────
