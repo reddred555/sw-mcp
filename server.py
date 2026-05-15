@@ -8,12 +8,112 @@ import win32com.client
 import pythoncom
 import subprocess
 import os
-
+import json
 mcp = FastMCP("stukach-sw-mcp")
 
 ARTCAM_EXE = r"C:\Program Files\ArtCAM 2012\ArtCAM.exe"
 ARTCAM_MACROS = r"C:\STUKACH\sw-mcp\artcam_macros"
 WORK_DIR = r"C:\STUKACH\work"
+       
+DOCS_DIR = r"C:\STUKACH\sw-mcp\docs"
+
+# ─────────────────────────────────────────
+# RESOURCES — проектна документація
+# ─────────────────────────────────────────
+
+@mcp.resource("docs://drever/spec")
+def drever_spec() -> str:
+    """Технічний звіт Drever Ingeniering — LED ручка з touch+mmWave."""
+    path = os.path.join(DOCS_DIR, "drever_ingeniering_v1.md")
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+3. Додай tool для генерації конфігурацій — перед блоком if __name__ == "__main__"::
+python# ─────────────────────────────────────────
+# DREVER INGENIERING — 3D КОНФІГУРАЦІЇ
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def drever_create_handle(
+    level: str = "mid",
+    length_mm: float = 500.0,
+    scenario: str = "interior",
+    material: str = "Aluminum 6061"
+) -> str:
+    """
+    Створити 3D-модель ручки Drever Ingeniering у SolidWorks.
+    level: 'budget' | 'mid' | 'vip'
+    scenario: 'interior' | 'exterior'
+    length_mm: довжина ручки (300–800)
+    material: матеріал корпусу
+    """
+    name = f"drever_{level}_{scenario}_{int(length_mm)}mm"
+    sldprt = os.path.join(WORK_DIR, f"{name}.sldprt")
+    dxf    = os.path.join(WORK_DIR, f"{name}.dxf")
+    stl    = os.path.join(WORK_DIR, f"{name}.stl")
+
+    # Параметри з технічного звіту
+    configs = {
+        "budget": {"wall": 1.5, "slot_w": 8.0,  "slot_h": 4.0, "led_density": 60},
+        "mid":    {"wall": 1.5, "slot_w": 10.0, "slot_h": 5.0, "led_density": 60},
+        "vip":    {"wall": 2.0, "slot_w": 14.0, "slot_h": 6.0, "led_density": 144},
+    }
+    cfg = configs.get(level, configs["mid"])
+
+    sw_new_part()
+    sw_set_material(material)
+
+    # Базовий профіль 20×40 мм
+    sw_sketch_start("Front Plane")
+    sw_sketch_line(0, 0, 20, 0)
+    sw_sketch_line(20, 0, 20, 40)
+    sw_sketch_line(20, 40, 0, 40)
+    sw_sketch_line(0, 40, 0, 0)
+    sw_sketch_finish()
+    sw_extrude(length_mm, both_directions=False, thin_feature=True,
+               thin_thickness=cfg["wall"])
+
+    # Слот під розсіювач
+    sw_sketch_start("Top Plane")
+    cx = 10.0  # центр 20 мм грані
+    sw_sketch_line(cx - cfg["slot_w"]/2, 0,
+                   cx + cfg["slot_w"]/2, 0)
+    sw_sketch_finish()
+    sw_extrude(cfg["slot_h"], both_directions=False)
+
+    sw_save(sldprt)
+    sw_export_dxf(dxf)
+    sw_export_stl(stl)
+
+    bom = {
+        "name": name,
+        "level": level,
+        "scenario": scenario,
+        "length_mm": length_mm,
+        "material": material,
+        "tube_profile": "20x40",
+        "wall_mm": cfg["wall"],
+        "slot_mm": f"{cfg['slot_w']}x{cfg['slot_h']}",
+        "led_density": cfg["led_density"],
+        "files": {"sldprt": sldprt, "dxf": dxf, "stl": stl}
+    }
+    bom_path = os.path.join(WORK_DIR, f"{name}_bom.json")
+    with open(bom_path, "w", encoding="utf-8") as f:
+        json.dump(bom, f, ensure_ascii=False, indent=2)
+
+    return (
+        f"Drever {level.upper()} / {scenario} / {length_mm}мм\n"
+        f"✓ Матеріал: {material}\n"
+        f"✓ Профіль: 20×40×{cfg['wall']}мм\n"
+        f"✓ Слот розсіювача: {cfg['slot_w']}×{cfg['slot_h']}мм\n"
+        f"✓ LED щільність: {cfg['led_density']} LED/м\n"
+        f"✓ SLDPRT → {sldprt}\n"
+        f"✓ DXF    → {dxf}\n"
+        f"✓ STL    → {stl}\n"
+        f"✓ BOM    → {bom_path}"
+    ) 
+
+
 
 def _sw():
     """Get SolidWorks application from the current thread (safe for FastMCP threading)."""
@@ -66,8 +166,9 @@ def sw_activate_document(path: str) -> str:
     app = _sw()
     for doc in (app.GetDocuments or []):
         if doc.GetPathName == path or doc.GetTitle == path:
+            err_ref = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
             try:
-                app.ActivateDoc3(doc.GetPathName or doc.GetTitle, False, 0)
+                app.ActivateDoc3(doc.GetPathName or doc.GetTitle, False, 0, err_ref)
             except Exception as e:
                 return f"Помилка активації: {e}"
             return f"Активовано: {doc.GetTitle}"
@@ -155,21 +256,49 @@ def sw_save(filepath: str) -> str:
 @mcp.tool()
 def sw_get_mass_properties() -> str:
     """Отримати масо-інерційні характеристики поточної деталі."""
-    mp = _doc().Extension.CreateMassProperty2()
-    if mp is None:
-        return "Не вдалось отримати масо-інерційні характеристики."
-    mass = mp.Mass
-    vol = mp.Volume
-    area = mp.SurfaceArea
-    density = mp.Density
-    cx, cy, cz = mp.CenterOfMass
-    return (
-        f"Маса:     {mass * 1000:.4f} г\n"
-        f"Об'єм:    {vol * 1e6:.4f} см³\n"
-        f"Площа:    {area * 1e4:.4f} см²\n"
-        f"Щільність:{density / 1000:.4f} г/см³\n"
-        f"ЦМ:       X={cx*1000:.3f} Y={cy*1000:.3f} Z={cz*1000:.3f} мм"
-    )
+    doc = _doc()
+
+    def _get(obj, name):
+        """COM property може бути callable (метод) або вже значенням (property)."""
+        v = getattr(obj, name)
+        return v() if callable(v) else v
+
+    def _fmt(mass, vol, area, density, cx, cy, cz) -> str:
+        return (
+            f"Маса:     {mass * 1000:.4f} г\n"
+            f"Об'єм:    {vol * 1e6:.4f} см³\n"
+            f"Площа:    {area * 1e4:.4f} см²\n"
+            f"Щільність:{density / 1000:.4f} г/см³\n"
+            f"ЦМ:       X={cx*1000:.3f} Y={cy*1000:.3f} Z={cz*1000:.3f} мм"
+        )
+
+    # CreateMassProperty2 (SW2016+) та CreateMassProperty (SW2012-2015)
+    for creator in ("CreateMassProperty2", "CreateMassProperty"):
+        try:
+            attr = getattr(doc.Extension, creator)
+            mp = attr() if callable(attr) else attr
+            mass = float(_get(mp, "Mass"))
+            vol  = float(_get(mp, "Volume"))
+            area = float(_get(mp, "SurfaceArea"))
+            dens = float(_get(mp, "Density"))
+            com  = _get(mp, "CenterOfMass")
+            cx, cy, cz = (float(com[0]), float(com[1]), float(com[2])) if hasattr(com, '__len__') else (float(com), 0.0, 0.0)
+            return _fmt(mass, vol, area, dens, cx, cy, cz)
+        except Exception:
+            pass
+
+    # Fallback: GetMassProperties → масив [mass, vol, area, cx, cy, cz, ...]
+    try:
+        attr = getattr(doc, "GetMassProperties")
+        props = attr() if callable(attr) else attr
+        if props is None or len(props) < 6:
+            return "Не вдалось отримати масо-інерційні характеристики."
+        mass, vol, area = float(props[0]), float(props[1]), float(props[2])
+        cx, cy, cz = float(props[3]), float(props[4]), float(props[5])
+        density = mass / vol if vol else 0.0
+        return _fmt(mass, vol, area, density, cx, cy, cz)
+    except Exception as e:
+        return f"Не вдалось отримати масо-інерційні характеристики: {e}"
 
 @mcp.tool()
 def sw_list_features() -> str:
@@ -1378,9 +1507,7 @@ def sw_add_smart_dimension() -> str:
 def sw_rename_simulation_study(old_name: str, new_name: str) -> str:
     """Перейменувати дослідження симуляції за назвою."""
     try:
-        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
-        if cosmos is None:
-            raise RuntimeError("Add-in CosmosWorks не завантажено. Увімкніть SolidWorks Simulation в Інструменти → Add-Ins.")
+        cosmos = _get_cosmos()
         study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(old_name)
         if study is None:
             return f"Дослідження не знайдено: {old_name}"
@@ -1391,6 +1518,17 @@ def sw_rename_simulation_study(old_name: str, new_name: str) -> str:
     except Exception as e:
         raise RuntimeError(f"SW Simulation недоступний: {e}")
 
+def _get_cosmos():
+    """Повертає об'єкт CosmosWorks або кидає RuntimeError якщо add-in не активний."""
+    cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+    if cosmos is None:
+        raise RuntimeError(
+            "Add-in CosmosWorks (SolidWorks Simulation) не завантажено. "
+            "Увімкніть його вручну: Інструменти → Додатки → SolidWorks Simulation."
+        )
+    return cosmos
+
+
 @mcp.tool()
 def sw_simulation_setup(study_name: str = "Static 1") -> str:
     """
@@ -1398,9 +1536,7 @@ def sw_simulation_setup(study_name: str = "Static 1") -> str:
     Потребує встановленого додатку SolidWorks Simulation (Інструменти → Add-Ins).
     """
     try:
-        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
-        if cosmos is None:
-            raise RuntimeError("Add-in CosmosWorks не завантажено. Увімкніть SolidWorks Simulation в Інструменти → Add-Ins.")
+        cosmos = _get_cosmos()
         cw_doc = cosmos.cwDoc(_doc())
         study = cw_doc.StudyManager().CreateNewStudy3(study_name, 0, 0, None)
         if study is None:
@@ -1415,7 +1551,7 @@ def sw_simulation_setup(study_name: str = "Static 1") -> str:
 def sw_simulation_run(study_name: str = "Static 1") -> str:
     """Запустити розрахунок статичного дослідження."""
     try:
-        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+        cosmos = _get_cosmos()
         study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name)
         if study is None:
             return f"Дослідження '{study_name}' не знайдено. Спочатку викличте sw_simulation_setup."
@@ -1431,7 +1567,7 @@ def sw_simulation_results(study_name: str = "Static 1") -> str:
     максимальне напруження (von Mises), переміщення, запас міцності.
     """
     try:
-        cosmos = _sw().GetAddInObject("CosmosWorks.CosmosWorks")
+        cosmos = _get_cosmos()
         results = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name).Results()
         stress_data = results.GetResultData2(0, 0, 0, None)   # VON_MISES
         disp_data   = results.GetResultData2(1, 0, 0, None)   # DISPLACEMENT
@@ -1446,6 +1582,113 @@ def sw_simulation_results(study_name: str = "Static 1") -> str:
         return "\n".join(lines)
     except Exception as e:
         raise RuntimeError(f"Помилка отримання результатів: {e}")
+
+# ─────────────────────────────────────────
+# ІНЖЕНЕРНИЙ АНАЛІЗ — БЕЗ SW SIMULATION
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_clip_load_analysis(
+    arm_length_mm: float = 10.0,
+    arm_thickness_mm: float = 1.2,
+    arm_width_mm: float = 5.0,
+    deflection_mm: float = 3.0,
+    press_force_n: float = 15.0,
+    body_span_mm: float = 25.0,
+    body_thickness_mm: float = 2.0,
+    material_E_gpa: float = 2.3,
+    material_yield_mpa: float = 40.0,
+) -> str:
+    """
+    Інженерний розрахунок кліпса (балкова теорія, не потребує SW Simulation).
+
+    Аналіз 1 — Защіпка (snap-fit, консольна балка):
+      arm_length_mm      — довжина защіпки від кореня
+      arm_thickness_mm   — товщина защіпки
+      arm_width_mm       — ширина защіпки
+      deflection_mm      — розкриття при монтажі LED стрічки
+
+    Аналіз 2 — Натиск LED стрічки (балка на двох опорах):
+      press_force_n      — вертикальна сила від стрічки (Н)
+      body_span_mm       — прольот між точками кріплення
+      body_thickness_mm  — товщина стінки корпусу
+
+    material_E_gpa       — модуль пружності (ГПа), ABS=2.3
+    material_yield_mpa   — границя текучості (МПа), ABS=40
+    """
+    import math
+
+    E = material_E_gpa * 1e3   # МПа
+    sy = material_yield_mpa
+
+    # ── Аналіз 1: Защіпка (консольна балка) ──────────────────
+    L = arm_length_mm
+    h = arm_thickness_mm
+    b = arm_width_mm
+    d = deflection_mm
+
+    # Момент інерції прямокутного перерізу
+    I_arm = b * h**3 / 12
+
+    # Жорсткість (Н/мм)
+    k_arm = 3 * E * I_arm / L**3
+
+    # Зусилля для розкриття
+    F_open = k_arm * d
+
+    # Напруження у корені (МПа)
+    M_arm = F_open * L
+    c_arm = h / 2
+    sigma_arm = M_arm * c_arm / I_arm
+
+    # Запас міцності
+    sf_arm = sy / sigma_arm if sigma_arm > 0 else float("inf")
+
+    # Максимально допустиме відхилення без пластичної деформації
+    d_max = (2 * sy * L**2) / (3 * E * h)
+
+    # ── Аналіз 2: Корпус під натиском стрічки ────────────────
+    span = body_span_mm
+    t = body_thickness_mm
+    F_press = press_force_n
+
+    # Балка з рівномірним навантаженням (conservative: зосереджена сила в центрі)
+    M_body = F_press * span / 4        # максимальний момент (H·мм)
+    I_body = b * t**3 / 12
+    c_body = t / 2
+    sigma_body = M_body * c_body / I_body
+    sf_body = sy / sigma_body if sigma_body > 0 else float("inf")
+
+    # Прогин корпусу (балка на двох опорах, F в центрі)
+    delta_body = F_press * span**3 / (48 * E * I_body)
+
+    def _rating(sf: float) -> str:
+        if sf >= 2.0:   return "✅ НОРМА"
+        if sf >= 1.2:   return "⚠️  ГРАНИЧНИЙ"
+        return "❌ ПЕРЕВИЩЕННЯ"
+
+    lines = [
+        "═══ АНАЛІЗ КЛІПСА LED (ABS, балкова теорія) ═══",
+        "",
+        "── Защіпка (snap-fit, консольна балка) ──",
+        f"  Довжина L = {L} мм  |  Товщина h = {h} мм  |  Ширина b = {b} мм",
+        f"  Розкриття δ = {d} мм",
+        f"  Жорсткість:         {k_arm:.2f} Н/мм",
+        f"  Зусилля монтажу:    {F_open:.1f} Н",
+        f"  Напруження кореня:  {sigma_arm:.1f} МПа  (границя {sy} МПа)",
+        f"  Запас міцності:     {sf_arm:.2f}   {_rating(sf_arm)}",
+        f"  Макс. δ без деформ: {d_max:.2f} мм",
+        "",
+        "── Корпус (натиск LED стрічки) ──",
+        f"  Проліт = {span} мм  |  Товщина стінки = {t} мм",
+        f"  Сила F = {F_press} Н",
+        f"  Напруження вигину:  {sigma_body:.1f} МПа  (границя {sy} МПа)",
+        f"  Запас міцності:     {sf_body:.2f}   {_rating(sf_body)}",
+        f"  Прогин корпусу:     {delta_body:.3f} мм",
+        "",
+        "══ Для точного FEA: увімкніть SolidWorks Simulation → Add-Ins ══",
+    ]
+    return "\n".join(lines)
 
 # ─────────────────────────────────────────
 # ARTCAM 2012 — ФРЕЗЕРУВАННЯ
@@ -1729,7 +1972,123 @@ def _finalize_entity(entity: dict, circles: list, lines_geom: list, xs: list, ys
         xs.extend([cx - r, cx + r])
         ys.extend([cy - r, cy + r])
 
+    
+# ─────────────────────────────────────────
+# PROMPTS
+# ─────────────────────────────────────────
+
+@mcp.prompt()
+def drever_model_prompt(
+    level: str = "mid",
+    length_mm: str = "500",
+    scenario: str = "interior"
+) -> str:
+    """Промт для генерації 3D-моделі ручки Drever Ingeniering в SolidWorks."""
+    return f"""
+Ти — CAD-агент STUKACH MFG. Твоє завдання: побудувати параметричну 3D-модель
+дверної ручки Drever Ingeniering в SolidWorks через MCP-інструменти.
+
+## Параметри задачі
+- Рівень комплектації : {level}  (budget | mid | vip)
+- Довжина ручки       : {length_mm} мм
+- Сценарій            : {scenario}  (interior | exterior)
+
+## Специфікація корпусу (з технічного звіту)
+- Профіль труби       : 20×40 мм (квадратна)
+- Матеріал            : Aluminum 6061 (interior) / AISI 304 (exterior VIP)
+- Товщина стінки      : 1.5 мм (budget/mid) / 2.0 мм (vip)
+- Слот під розсіювач  : budget=8×4 мм / mid=10×5 мм / vip=14×6 мм
+- LED щільність       : budget/mid=60 LED/м / vip=144 LED/м
+- Торцеві кришки      : 2 шт., посадка з O-ring (exterior — герметичні)
+
+## Алгоритм побудови — виконуй кроки СТРОГО послідовно
+
+### Крок 1 — Ініціалізація
 
 # ─────────────────────────────────────────
 if __name__ == "__main__":
     mcp.run()
+# ─────────────────────────────────────────
+# DREVER INGENIERING — 3D КОНФІГУРАЦІЇ
+# ─────────────────────────────────────────
+
+@mcp.tool()
+def drever_create_handle(
+    level: str = "mid",
+    length_mm: float = 500.0,
+    scenario: str = "interior",
+    material: str = "Aluminum 6061"
+) -> str:
+    """
+    Створити 3D-модель ручки Drever Ingeniering у SolidWorks.
+    level: 'budget' | 'mid' | 'vip'
+    scenario: 'interior' | 'exterior'
+    length_mm: довжина ручки (300–800)
+    material: матеріал корпусу
+    """
+    name = f"drever_{level}_{scenario}_{int(length_mm)}mm"
+    sldprt = os.path.join(WORK_DIR, f"{name}.sldprt")
+    dxf    = os.path.join(WORK_DIR, f"{name}.dxf")
+    stl    = os.path.join(WORK_DIR, f"{name}.stl")
+
+     
+    # Параметри з технічного звіту
+    configs = {
+        "budget": {"wall": 1.5, "slot_w": 8.0,  "slot_h": 4.0, "led_density": 60},
+        "mid":    {"wall": 1.5, "slot_w": 10.0, "slot_h": 5.0, "led_density": 60},
+        "vip":    {"wall": 2.0, "slot_w": 14.0, "slot_h": 6.0, "led_density": 144},
+    }
+    cfg = configs.get(level, configs["mid"])
+
+    sw_new_part()
+    sw_set_material(material)
+
+    # Базовий профіль 20×40 мм
+    sw_sketch_start("Front Plane")
+    sw_sketch_line(0, 0, 20, 0)
+    sw_sketch_line(20, 0, 20, 40)
+    sw_sketch_line(20, 40, 0, 40)
+    sw_sketch_line(0, 40, 0, 0)
+    sw_sketch_finish()
+    sw_extrude(length_mm, both_directions=False, thin_feature=True,
+               thin_thickness=cfg["wall"])
+
+    # Слот під розсіювач
+    sw_sketch_start("Top Plane")
+    cx = 10.0  # центр 20 мм грані
+    sw_sketch_line(cx - cfg["slot_w"]/2, 0,
+                   cx + cfg["slot_w"]/2, 0)
+    sw_sketch_finish()
+    sw_extrude(cfg["slot_h"], both_directions=False)
+
+    sw_save(sldprt)
+    sw_export_dxf(dxf)
+    sw_export_stl(stl)
+
+    bom = {
+        "name": name,
+        "level": level,
+        "scenario": scenario,
+        "length_mm": length_mm,
+        "material": material,
+        "tube_profile": "20x40",
+        "wall_mm": cfg["wall"],
+        "slot_mm": f"{cfg['slot_w']}x{cfg['slot_h']}",
+        "led_density": cfg["led_density"],
+        "files": {"sldprt": sldprt, "dxf": dxf, "stl": stl}
+    }
+    bom_path = os.path.join(WORK_DIR, f"{name}_bom.json")
+    with open(bom_path, "w", encoding="utf-8") as f:
+        json.dump(bom, f, ensure_ascii=False, indent=2)
+
+    return (
+        f"Drever {level.upper()} / {scenario} / {length_mm}мм\n"
+        f"✓ Матеріал: {material}\n"
+        f"✓ Профіль: 20×40×{cfg['wall']}мм\n"
+        f"✓ Слот розсіювача: {cfg['slot_w']}×{cfg['slot_h']}мм\n"
+        f"✓ LED щільність: {cfg['led_density']} LED/м\n"
+        f"✓ SLDPRT → {sldprt}\n"
+        f"✓ DXF    → {dxf}\n"
+        f"✓ STL    → {stl}\n"
+        f"✓ BOM    → {bom_path}"
+    )
