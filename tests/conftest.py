@@ -18,7 +18,9 @@ def _make_win32_stub():
     pythoncom = types.ModuleType("pythoncom")
     pythoncom.CoInitialize = lambda: None
     pythoncom.VT_BYREF = 0
-    pythoncom.VT_I4 = 0
+    pythoncom.VT_I4 = 3
+    pythoncom.VT_R8 = 5
+    pythoncom.VT_BOOL = 11
     sys.modules["pythoncom"] = pythoncom
 
     fastmcp = types.ModuleType("fastmcp")
@@ -37,6 +39,11 @@ def _make_win32_stub():
                 return fn
             return decorator
 
+        def prompt(self):
+            def decorator(fn):
+                return fn
+            return decorator
+
         def run(self):
             pass
 
@@ -50,8 +57,8 @@ import server  # noqa: E402  (must come after stubs)
 
 
 @pytest.fixture(autouse=True)
-def reset_swapp():
-    """Скидає глобальний swApp між тестами."""
-    original = server.swApp
+def reset_sw():
+    """Скидає _sw між тестами."""
+    original = server._sw
     yield
-    server.swApp = original
+    server._sw = original

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Start-Sleep *)",
+      "mcp__stukach-sw__sw_list_configurations"
+    ]
+  }
+}

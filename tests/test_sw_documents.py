@@ -5,33 +5,29 @@ import server
 
 def _make_doc(title, path="", doc_type=1, is_active=False, unsaved=False):
     """Фабрика мок-документа."""
+    _title = title
+    _path = path
+    _doc_type = doc_type
+    _unsaved = unsaved
 
     class Doc:
-        _next = None
-
+        @property
         def GetTitle(self):
-            return title
+            return _title
 
+        @property
         def GetPathName(self):
-            return path
+            return _path
 
+        @property
         def GetType(self):
-            return doc_type
+            return _doc_type
 
+        @property
         def GetSaveFlag(self):
-            return not unsaved  # True = збережено
-
-        def GetNext(self):
-            return self._next
+            return not _unsaved
 
     return Doc()
-
-
-def _chain(*docs):
-    """З'єднує документи в linked list."""
-    for i in range(len(docs) - 1):
-        docs[i]._next = docs[i + 1]
-    return docs[0]
 
 
 # ──────────────────────────────────────────────────────────────
@@ -40,13 +36,14 @@ def _chain(*docs):
 
 class TestSwListDocuments:
     def _setup(self, docs, active=None):
+        _docs = docs
+        _active = active
+
         class FakeApp:
-            def GetFirstDocument(self_):
-                return docs[0] if docs else None
+            GetDocuments = _docs
+            ActiveDoc = _active
 
-            ActiveDoc = active
-
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
 
     def test_no_documents(self):
         self._setup([])
@@ -65,7 +62,6 @@ class TestSwListDocuments:
         asm = _make_doc("a.sldasm", doc_type=2)
         drw = _make_doc("d.slddrw", doc_type=3)
         unk = _make_doc("x.file", doc_type=99)
-        _chain(part, asm, drw, unk)
         self._setup([part, asm, drw, unk])
         result = server.sw_list_documents()
         assert "[Part]" in result
@@ -88,7 +84,6 @@ class TestSwListDocuments:
     def test_duplicate_suppression(self):
         doc1 = _make_doc("same.sldprt", path=r"C:\work\same.sldprt")
         doc2 = _make_doc("same.sldprt", path=r"C:\work\same.sldprt")
-        _chain(doc1, doc2)
         self._setup([doc1, doc2])
         result = server.sw_list_documents()
         assert result.count("[Part]") == 1
@@ -106,16 +101,15 @@ class TestSwListDocuments:
 
 class TestSwActivateDocument:
     def _setup(self, docs):
-        first = _chain(*docs) if len(docs) > 1 else docs[0]
+        _docs = docs
 
         class FakeApp:
-            def GetFirstDocument(self_):
-                return first
+            GetDocuments = _docs
 
-            def ActivateDoc3(self_, path_or_title, silent, opts):
-                return 0  # успіх
+            def ActivateDoc3(self_, path_or_title, silent, opts, err_ref=None):
+                return 0
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
 
     def test_match_by_path(self):
         doc = _make_doc("part.sldprt", path=r"C:\work\part.sldprt")
@@ -142,17 +136,16 @@ class TestSwActivateDocument:
 
 class TestSwCloseDocument:
     def _setup(self, docs):
-        first = _chain(*docs) if len(docs) > 1 else docs[0]
+        _docs = docs
         closed = []
 
         class FakeApp:
-            def GetFirstDocument(self_):
-                return first
+            GetDocuments = _docs
 
             def CloseDoc(self_, name):
                 closed.append(name)
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
         return closed
 
     def test_close_by_path(self):

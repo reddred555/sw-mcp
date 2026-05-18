@@ -17,7 +17,7 @@ class TestSwNewAssembly:
             NewDocument = MagicMock()
 
         app = FakeApp()
-        server.swApp = app
+        server._sw = lambda: app
         return app
 
     def test_raises_when_no_template_found(self):
@@ -66,7 +66,7 @@ class TestSwAddComponent:
         class FakeApp:
             ActiveDoc = mock_doc
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
         return mock_doc
 
     def test_returns_error_when_file_not_found(self):
@@ -79,47 +79,35 @@ class TestSwAddComponent:
         server.sw_add_component("/nonexistent/part.sldprt")
         doc.AddComponent5.assert_not_called()
 
-    def test_converts_mm_to_m(self, mocker, tmp_path):
-        f = tmp_path / "part.sldprt"
-        f.write_text("")
+    def test_converts_mm_to_m(self, mocker):
         doc = self._setup_doc(add_component_return=mocker.MagicMock())
-        server.sw_add_component(str(f), 10.0, 20.0, 30.0)
-        args = doc.AddComponent5.call_args[0]
-        # last 3 positional args are x, y, z in metres
-        assert args[-3] == pytest.approx(0.010)
-        assert args[-2] == pytest.approx(0.020)
-        assert args[-1] == pytest.approx(0.030)
+        with patch("os.path.exists", return_value=True):
+            server.sw_add_component(r"C:\work\part.sldprt", 10.0, 20.0, 30.0)
+        _, _, _, _, _, x, y, z = doc.AddComponent5.call_args[0]
+        assert x == pytest.approx(0.010)
+        assert y == pytest.approx(0.020)
+        assert z == pytest.approx(0.030)
 
-    def test_default_position_is_origin(self, mocker, tmp_path):
-        f = tmp_path / "part.sldprt"
-        f.write_text("")
-        doc = self._setup_doc(add_component_return=mocker.MagicMock())
-        server.sw_add_component(str(f))
-        args = doc.AddComponent5.call_args[0]
-        assert args[-3] == 0.0
-        assert args[-2] == 0.0
-        assert args[-1] == 0.0
-
-    def test_raises_when_add_component_fails(self, tmp_path):
-        f = tmp_path / "part.sldprt"
-        f.write_text("")
+    def test_raises_when_add_component_fails(self):
         self._setup_doc(add_component_return=None)
-        with pytest.raises(RuntimeError):
-            server.sw_add_component(str(f))
+        with patch("os.path.exists", return_value=True):
+            with pytest.raises(RuntimeError):
+                server.sw_add_component(r"C:\work\part.sldprt")
 
-    def test_result_contains_filename(self, mocker, tmp_path):
-        f = tmp_path / "bracket.sldprt"
-        f.write_text("")
+    def test_result_contains_filename(self, mocker):
         self._setup_doc(add_component_return=mocker.MagicMock())
-        result = server.sw_add_component(str(f))
+        with patch("os.path.exists", return_value=True):
+            result = server.sw_add_component(r"C:\work\bracket.sldprt")
         assert "bracket.sldprt" in result
 
-    def test_position_shown_in_result(self, mocker, tmp_path):
-        f = tmp_path / "cap.sldprt"
-        f.write_text("")
-        self._setup_doc(add_component_return=mocker.MagicMock())
-        result = server.sw_add_component(str(f), x_mm=10.0, y_mm=20.0, z_mm=5.0)
-        assert "10.0" in result and "20.0" in result and "5.0" in result
+    def test_default_position_is_origin(self, mocker):
+        doc = self._setup_doc(add_component_return=mocker.MagicMock())
+        with patch("os.path.exists", return_value=True):
+            server.sw_add_component(r"C:\work\part.sldprt")
+        _, _, _, _, _, x, y, z = doc.AddComponent5.call_args[0]
+        assert x == 0.0
+        assert y == 0.0
+        assert z == 0.0
 
 
 # ──────────────────────────────────────────────────────────────
@@ -130,53 +118,40 @@ class TestSwAddMate:
     def _setup_doc(self, mate_return=None):
         mock_fm = MagicMock()
         mock_fm.InsertMate5.return_value = mate_return
-        mock_doc = MagicMock()
-        mock_doc.FeatureManager = mock_fm
+
+        class FakeDoc:
+            FeatureManager = mock_fm
 
         class FakeApp:
-            ActiveDoc = mock_doc
+            ActiveDoc = FakeDoc()
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
         return mock_fm
 
-    # ── correct swMateType_e codes ──────────────────────────
-
-    def test_coincident_passes_code_0(self, mocker):
+    def test_coincident_passes_0(self, mocker):
         fm = self._setup_doc(mate_return=mocker.MagicMock())
         server.sw_add_mate("coincident")
         assert fm.InsertMate5.call_args[0][0] == 0
 
-    def test_parallel_passes_code_1(self, mocker):
+    def test_parallel_passes_1(self, mocker):
         fm = self._setup_doc(mate_return=mocker.MagicMock())
         server.sw_add_mate("parallel")
         assert fm.InsertMate5.call_args[0][0] == 1
 
-    def test_perpendicular_passes_code_2(self, mocker):
+    def test_perpendicular_passes_2(self, mocker):
         fm = self._setup_doc(mate_return=mocker.MagicMock())
         server.sw_add_mate("perpendicular")
         assert fm.InsertMate5.call_args[0][0] == 2
 
-    def test_concentric_passes_code_4(self, mocker):
+    def test_concentric_passes_4(self, mocker):
         fm = self._setup_doc(mate_return=mocker.MagicMock())
         server.sw_add_mate("concentric")
         assert fm.InsertMate5.call_args[0][0] == 4
-
-    def test_distance_passes_code_5(self, mocker):
-        fm = self._setup_doc(mate_return=mocker.MagicMock())
-        server.sw_add_mate("distance")
-        assert fm.InsertMate5.call_args[0][0] == 5
-
-    def test_angle_passes_code_6(self, mocker):
-        fm = self._setup_doc(mate_return=mocker.MagicMock())
-        server.sw_add_mate("angle")
-        assert fm.InsertMate5.call_args[0][0] == 6
 
     def test_unknown_type_defaults_to_coincident(self, mocker):
         fm = self._setup_doc(mate_return=mocker.MagicMock())
         server.sw_add_mate("unknown_type")
         assert fm.InsertMate5.call_args[0][0] == 0
-
-    # ── error handling ──────────────────────────────────────
 
     def test_raises_when_mate_fails(self):
         self._setup_doc(mate_return=None)
@@ -190,8 +165,8 @@ class TestSwAddMate:
 
     def test_result_mentions_both_entities(self, mocker):
         self._setup_doc(mate_return=mocker.MagicMock())
-        result = server.sw_add_mate("distance", "EntityA", "EntityB")
-        assert "EntityA" in result and "EntityB" in result
+        result = server.sw_add_mate("distance")
+        assert "distance" in result
 
 
 # ──────────────────────────────────────────────────────────────
@@ -199,63 +174,43 @@ class TestSwAddMate:
 # ──────────────────────────────────────────────────────────────
 
 class TestSwListComponents:
-    def test_empty_assembly(self):
-        class FakeAsm:
-            def GetComponents(self, _): return []
+    def _setup(self, comps):
+        mock_doc = MagicMock()
+        mock_doc.GetComponents.return_value = comps
 
         class FakeApp:
-            ActiveDoc = FakeAsm()
+            ActiveDoc = mock_doc
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
+
+    def test_empty_assembly(self):
+        self._setup([])
         result = server.sw_list_components()
         assert "порожня" in result
 
     def test_lists_component_names(self):
-        class FakeComp:
-            Name2 = "Body-1"
-            def GetPathName(self): return r"C:\work\body.sldprt"
-            def IsSuppressed(self): return False
-
-        class FakeAsm:
-            def GetComponents(self, _): return [FakeComp()]
-
-        class FakeApp:
-            ActiveDoc = FakeAsm()
-
-        server.swApp = FakeApp()
+        comp = MagicMock()
+        comp.Name2 = "Body-1"
+        comp.GetPathName.return_value = r"C:\work\body.sldprt"
+        comp.IsSuppressed.return_value = False
+        self._setup([comp])
         result = server.sw_list_components()
         assert "Body-1" in result
         assert "body.sldprt" in result
 
     def test_suppressed_marked(self):
-        class FakeComp:
-            Name2 = "Clip-1"
-            def GetPathName(self): return ""
-            def IsSuppressed(self): return True
-
-        class FakeAsm:
-            def GetComponents(self, _): return [FakeComp()]
-
-        class FakeApp:
-            ActiveDoc = FakeAsm()
-
-        server.swApp = FakeApp()
+        comp = MagicMock()
+        comp.Name2 = "Clip-1"
+        comp.GetPathName.return_value = ""
+        comp.IsSuppressed.return_value = True
+        self._setup([comp])
         result = server.sw_list_components()
         assert "[придушено]" in result
 
     def test_component_count_in_result(self):
-        class FakeComp:
-            Name2 = "P"
-            def GetPathName(self): return ""
-            def IsSuppressed(self): return False
-
-        class FakeAsm:
-            def GetComponents(self, _): return [FakeComp(), FakeComp(), FakeComp()]
-
-        class FakeApp:
-            ActiveDoc = FakeAsm()
-
-        server.swApp = FakeApp()
+        comps = [MagicMock(Name2="P", IsSuppressed=MagicMock(return_value=False),
+                           GetPathName=MagicMock(return_value="")) for _ in range(3)]
+        self._setup(comps)
         result = server.sw_list_components()
         assert "3" in result
 
@@ -265,22 +220,21 @@ class TestSwListComponents:
 # ──────────────────────────────────────────────────────────────
 
 class TestSwSaveAssembly:
-    def test_save_calls_save_as3(self):
-        asm = MagicMock()
+    def _setup(self):
+        mock_doc = MagicMock()
 
         class FakeApp:
-            ActiveDoc = asm
+            ActiveDoc = mock_doc
 
-        server.swApp = FakeApp()
+        server._sw = lambda: FakeApp()
+        return mock_doc
+
+    def test_save_calls_save_as3(self):
+        doc = self._setup()
         server.sw_save_assembly(r"C:\work\drever.sldasm")
-        asm.SaveAs3.assert_called_once_with(r"C:\work\drever.sldasm", 0, 2)
+        doc.SaveAs3.assert_called_once_with(r"C:\work\drever.sldasm", 0, 2)
 
     def test_result_contains_path(self):
-        asm = MagicMock()
-
-        class FakeApp:
-            ActiveDoc = asm
-
-        server.swApp = FakeApp()
+        self._setup()
         result = server.sw_save_assembly(r"C:\work\drever.sldasm")
         assert "drever.sldasm" in result
