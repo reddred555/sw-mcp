@@ -1,7 +1,7 @@
-"""Тести для sw_new_assembly, sw_add_component, sw_add_mate."""
+"""Тести для sw_new_assembly, sw_add_component, sw_add_mate, sw_list_components, sw_save_assembly."""
 import os
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 import server
 
 
@@ -162,3 +162,79 @@ class TestSwAddMate:
         self._setup_doc(mate_return=mocker.MagicMock())
         result = server.sw_add_mate("parallel")
         assert "parallel" in result
+
+    def test_result_mentions_both_entities(self, mocker):
+        self._setup_doc(mate_return=mocker.MagicMock())
+        result = server.sw_add_mate("distance")
+        assert "distance" in result
+
+
+# ──────────────────────────────────────────────────────────────
+# sw_list_components
+# ──────────────────────────────────────────────────────────────
+
+class TestSwListComponents:
+    def _setup(self, comps):
+        mock_doc = MagicMock()
+        mock_doc.GetComponents.return_value = comps
+
+        class FakeApp:
+            ActiveDoc = mock_doc
+
+        server._sw = lambda: FakeApp()
+
+    def test_empty_assembly(self):
+        self._setup([])
+        result = server.sw_list_components()
+        assert "порожня" in result
+
+    def test_lists_component_names(self):
+        comp = MagicMock()
+        comp.Name2 = "Body-1"
+        comp.GetPathName.return_value = r"C:\work\body.sldprt"
+        comp.IsSuppressed.return_value = False
+        self._setup([comp])
+        result = server.sw_list_components()
+        assert "Body-1" in result
+        assert "body.sldprt" in result
+
+    def test_suppressed_marked(self):
+        comp = MagicMock()
+        comp.Name2 = "Clip-1"
+        comp.GetPathName.return_value = ""
+        comp.IsSuppressed.return_value = True
+        self._setup([comp])
+        result = server.sw_list_components()
+        assert "[придушено]" in result
+
+    def test_component_count_in_result(self):
+        comps = [MagicMock(Name2="P", IsSuppressed=MagicMock(return_value=False),
+                           GetPathName=MagicMock(return_value="")) for _ in range(3)]
+        self._setup(comps)
+        result = server.sw_list_components()
+        assert "3" in result
+
+
+# ──────────────────────────────────────────────────────────────
+# sw_save_assembly
+# ──────────────────────────────────────────────────────────────
+
+class TestSwSaveAssembly:
+    def _setup(self):
+        mock_doc = MagicMock()
+
+        class FakeApp:
+            ActiveDoc = mock_doc
+
+        server._sw = lambda: FakeApp()
+        return mock_doc
+
+    def test_save_calls_save_as3(self):
+        doc = self._setup()
+        server.sw_save_assembly(r"C:\work\drever.sldasm")
+        doc.SaveAs3.assert_called_once_with(r"C:\work\drever.sldasm", 0, 2)
+
+    def test_result_contains_path(self):
+        self._setup()
+        result = server.sw_save_assembly(r"C:\work\drever.sldasm")
+        assert "drever.sldasm" in result

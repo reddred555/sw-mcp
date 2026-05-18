@@ -14,6 +14,7 @@ mcp = FastMCP("stukach-sw-mcp")
 ARTCAM_EXE = r"C:\Program Files\ArtCAM 2012\ArtCAM.exe"
 ARTCAM_MACROS = r"C:\STUKACH\sw-mcp\artcam_macros"
 WORK_DIR = r"C:\STUKACH\work"
+DOCS_DIR = r"C:\STUKACH\sw-mcp\docs"
 
 def _sw():
     """Get SolidWorks application from the current thread (safe for FastMCP threading)."""
@@ -1145,6 +1146,26 @@ def sw_add_mate(mate_type: str = "coincident") -> str:
     return f"Спряження '{mate_type}' додано."
 
 @mcp.tool()
+def sw_list_components() -> str:
+    """Показати всі компоненти активної збірки."""
+    comps = _doc().GetComponents(False)
+    if not comps:
+        return "Збірка порожня або не є збіркою."
+    lines = [f"Компонентів: {len(comps)}"]
+    for comp in comps:
+        name = comp.Name2
+        path = comp.GetPathName()
+        suppressed = " [придушено]" if comp.IsSuppressed() else ""
+        lines.append(f"  {name}{suppressed}\n    {path or '(без шляху)'}")
+    return "\n".join(lines)
+
+@mcp.tool()
+def sw_save_assembly(filepath: str) -> str:
+    """Зберегти активну збірку як .sldasm."""
+    _doc().SaveAs3(filepath, 0, 2)
+    return f"Збірка збережена: {filepath}"
+
+@mcp.tool()
 def sw_rename_mate(old_name: str, new_name: str) -> str:
     """Перейменувати спряження у збірці за назвою."""
     MATE_TYPES = {
@@ -1904,6 +1925,7 @@ def drever_model_prompt(
 ## Алгоритм побудови — виконуй кроки СТРОГО послідовно
 
 ### Крок 1 — Ініціалізація
+"""
 
 # ─────────────────────────────────────────
 # RESOURCES — проектна документація

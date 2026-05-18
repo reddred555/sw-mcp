@@ -39,6 +39,11 @@ def _make_win32_stub():
                 return fn
             return decorator
 
+        def prompt(self):
+            def decorator(fn):
+                return fn
+            return decorator
+
         def run(self):
             pass
 
