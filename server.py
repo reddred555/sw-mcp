@@ -771,7 +771,12 @@ def sw_sketch_start(plane: str = "Front Plane") -> str:
     plane: 'Front Plane' / 'Top Plane' / 'Right Plane'
     """
     doc = _doc()
-    doc.Extension.SelectByID2(plane, "PLANE", 0, 0, 0, False, 0, None, 0)
+    feat = doc.FirstFeature
+    while feat is not None:
+        if feat.GetTypeName2 == "RefPlane" and feat.Name == plane:
+            feat.Select2(False, 0)
+            break
+        feat = feat.GetNextFeature
     doc.SketchManager.InsertSketch(True)
     return f"Ескіз розпочато на '{plane}'"
 
@@ -1995,20 +2000,30 @@ def drever_create_handle(
     sh   = cfg["slot_h"] / 1000
     w, h = 0.020, 0.040  # 20 mm × 40 mm cross-section
 
+    def _sel_plane(name: str) -> bool:
+        feat = doc.FirstFeature
+        while feat is not None:
+            if feat.GetTypeName2 == "RefPlane" and feat.Name == name:
+                feat.Select2(False, 0)
+                return True
+            feat = feat.GetNextFeature
+        return False
+
     # ── Step 1: outer solid extrusion (single closed contour) ────────────
     try:
-        doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
+        if not _sel_plane("Front Plane"):
+            return "[FAIL] Front Plane не знайдено в дереві"
     except Exception as e:
-        return f"[FAIL SelectByID2 Front Plane] {e}"
+        return f"[FAIL _sel_plane step1] {e}"
     try:
         doc.SketchManager.InsertSketch(True)
     except Exception as e:
         return f"[FAIL InsertSketch step1] {e}"
     try:
-        doc.SketchManager.CreateLine(0, 0, 0,  w, 0, 0)
-        doc.SketchManager.CreateLine(w, 0, 0,  w, h, 0)
-        doc.SketchManager.CreateLine(w, h, 0,  0, h, 0)
-        doc.SketchManager.CreateLine(0, h, 0,  0, 0, 0)
+        doc.SketchManager.CreateLine(0.0, 0.0, 0.0, w,   0.0, 0.0)
+        doc.SketchManager.CreateLine(w,   0.0, 0.0, w,   h,   0.0)
+        doc.SketchManager.CreateLine(w,   h,   0.0, 0.0, h,   0.0)
+        doc.SketchManager.CreateLine(0.0, h,   0.0, 0.0, 0.0, 0.0)
     except Exception as e:
         return f"[FAIL CreateLine outer rect] {e}"
     doc.ClearSelection2(True)
@@ -2024,12 +2039,12 @@ def drever_create_handle(
         return "[FAIL] FeatureExtrusion2 returned None — перевірте SolidWorks"
 
     # ── Step 2: inner hollow cut (ThroughAll, single closed contour) ─────
-    doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
+    _sel_plane("Front Plane")
     doc.SketchManager.InsertSketch(True)
-    doc.SketchManager.CreateLine(wall,     wall,     0, w - wall, wall,     0)
-    doc.SketchManager.CreateLine(w - wall, wall,     0, w - wall, h - wall, 0)
-    doc.SketchManager.CreateLine(w - wall, h - wall, 0, wall,     h - wall, 0)
-    doc.SketchManager.CreateLine(wall,     h - wall, 0, wall,     wall,     0)
+    doc.SketchManager.CreateLine(wall,     wall,     0.0, w - wall, wall,     0.0)
+    doc.SketchManager.CreateLine(w - wall, wall,     0.0, w - wall, h - wall, 0.0)
+    doc.SketchManager.CreateLine(w - wall, h - wall, 0.0, wall,     h - wall, 0.0)
+    doc.SketchManager.CreateLine(wall,     h - wall, 0.0, wall,     wall,     0.0)
     doc.ClearSelection2(True)
     feat_hollow = doc.FeatureManager.FeatureCut4(
         True, False, False, 1, 0, 0.0, 0.0,
@@ -2043,12 +2058,12 @@ def drever_create_handle(
     # ── Step 3: LED slot cut (cross-section on Front Plane, ThroughAll) ──
     # Slot runs full tube length; cuts from top face (Y=h) downward by sh.
     cx = w / 2
-    doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
+    _sel_plane("Front Plane")
     doc.SketchManager.InsertSketch(True)
-    doc.SketchManager.CreateLine(cx - sw_s/2, h - sh, 0, cx + sw_s/2, h - sh, 0)
-    doc.SketchManager.CreateLine(cx + sw_s/2, h - sh, 0, cx + sw_s/2, h,      0)
-    doc.SketchManager.CreateLine(cx + sw_s/2, h,      0, cx - sw_s/2, h,      0)
-    doc.SketchManager.CreateLine(cx - sw_s/2, h,      0, cx - sw_s/2, h - sh, 0)
+    doc.SketchManager.CreateLine(cx - sw_s/2, h - sh, 0.0, cx + sw_s/2, h - sh, 0.0)
+    doc.SketchManager.CreateLine(cx + sw_s/2, h - sh, 0.0, cx + sw_s/2, h,      0.0)
+    doc.SketchManager.CreateLine(cx + sw_s/2, h,      0.0, cx - sw_s/2, h,      0.0)
+    doc.SketchManager.CreateLine(cx - sw_s/2, h,      0.0, cx - sw_s/2, h - sh, 0.0)
     doc.ClearSelection2(True)
     feat_slot = doc.FeatureManager.FeatureCut4(
         True, False, False, 1, 0, 0.0, 0.0,
