@@ -1436,9 +1436,101 @@ def sw_add_smart_dimension() -> str:
         raise RuntimeError("Не вдалось додати розмір. Виділіть геометрію і спробуйте знову.")
     return "Розмір додано."
 
+@mcp.tool()
+def sw_list_dimensions() -> str:
+    """Показати всі параметри-розміри (D1@Ескіз1, ...) в активному документі."""
+    doc = _doc()
+    feat = doc.FirstFeature
+    found = []
+    while feat:
+        fname = feat.Name
+        for prefix in ("D1", "D2", "D3", "D4", "D5"):
+            pname = f"{prefix}@{fname}"
+            try:
+                p = doc.Parameter(pname)
+                if p is not None:
+                    found.append(f"{pname} = {p.SystemValue * 1000:.4f} мм")
+            except Exception:
+                pass
+        feat = feat.GetNextFeature
+    return "\n".join(found) if found else "Параметри не знайдено"
+
+@mcp.tool()
+def sw_set_dimension(param_name: str, value_mm: float) -> str:
+    """
+    Змінити розмір ескізу за назвою параметра (наприклад 'D1@Sketch1').
+    Після зміни виконується перебудова моделі.
+    Список параметрів — sw_list_dimensions.
+    """
+    doc = _doc()
+    p = doc.Parameter(param_name)
+    if p is None:
+        return f"Параметр '{param_name}' не знайдено. Використайте sw_list_dimensions."
+    old_val = p.SystemValue * 1000
+    p.SystemValue = value_mm / 1000.0
+    try:
+        doc.ForceRebuild3(False)
+    except Exception:
+        try:
+            doc.EditRebuild3()
+        except Exception:
+            pass
+    actual = doc.Parameter(param_name).SystemValue * 1000
+    return f"{param_name}: {old_val:.4f} мм → {actual:.4f} мм"
+
 # ─────────────────────────────────────────
 # SOLIDWORKS — СИМУЛЯЦІЯ
 # ─────────────────────────────────────────
+
+@mcp.tool()
+def sw_simulation_load_addin() -> str:
+    """
+    Завантажити SolidWorks Simulation add-in (cosworks.dll).
+    Викликайте якщо sw_simulation_setup повертає помилку про відсутній add-in.
+    """
+    import time
+    app = _sw()
+    if app.GetAddInObject("CosmosWorks.CosmosWorks") is not None:
+        return "Simulation add-in вже завантажено."
+    candidates = [
+        r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\Simulation\cosworks.dll",
+        r"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS (2)\Simulation\cosworks.dll",
+        r"C:\Program Files\SolidWorks Corp\SolidWorks\Simulation\cosworks.dll",
+    ]
+    dll = next((p for p in candidates if os.path.exists(p)), None)
+    if dll is None:
+        return (
+            "cosworks.dll не знайдено — Simulation не встановлено.\n"
+            "Активуйте вручну: SW → Інструменти → Доповнення → SOLIDWORKS Simulation → OK"
+        )
+    app.LoadAddIn(dll)
+    for i in range(10):
+        time.sleep(1)
+        if app.GetAddInObject("CosmosWorks.CosmosWorks") is not None:
+            return f"Simulation add-in завантажено за {i + 1} сек."
+    return (
+        "LoadAddIn викликано, але add-in не відповідає.\n"
+        "Активуйте вручну: SW → Інструменти → Доповнення → SOLIDWORKS Simulation → OK"
+    )
+
+@mcp.tool()
+def sw_run_macro(macro_path: str, module_name: str = "NewMacros", proc_name: str = "main") -> str:
+    """
+    Запустити VBA-макрос SolidWorks (.swb або .bas).
+    module_name: значення атрибута VB_Name у файлі макросу (зазвичай 'NewMacros').
+    proc_name:   назва процедури для запуску.
+    """
+    if not os.path.exists(macro_path):
+        return f"Файл макросу не знайдено: {macro_path}"
+    app = _sw()
+    errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+    ret = app.RunMacro2(macro_path, module_name, proc_name, False, errors)
+    if ret:
+        return f"Макрос виконано: {macro_path}"
+    return (
+        f"Макрос не вдався (err={errors.value}).\n"
+        f"Перевірте module_name (VB_Name у файлі) та proc_name."
+    )
 
 @mcp.tool()
 def sw_rename_simulation_study(old_name: str, new_name: str) -> str:
@@ -1496,6 +1588,38 @@ def sw_simulation_run(study_name: str = "Static 1") -> str:
         return f"Розрахунок '{study_name}' завершено." if not errors else f"Завершено з попередженнями: {errors}"
     except Exception as e:
         raise RuntimeError(f"Помилка розрахунку: {e}")
+
+@mcp.tool()
+def sw_simulation_mesh(
+    study_name: str = "Static 1",
+    max_element_mm: float = 2.0,
+    min_element_mm: float = 0.4,
+    quality: int = 1,
+) -> str:
+    """
+    Створити FEA-сітку для дослідження.
+    quality: 1 = висока якість (curved elements), 0 = чернова.
+    Викликайте після sw_simulation_setup, перед sw_simulation_run.
+    """
+    import time
+    cosmos = _get_cosmos()
+    study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name)
+    if study is None:
+        return f"Дослідження '{study_name}' не знайдено. Спочатку sw_simulation_setup."
+    try:
+        mesh_mgr = study.MeshManager
+        mesh = mesh_mgr.GetMesh()
+        mesh.MeshType = 0
+        mesh.Quality = quality
+        mesh_mgr.CreateMesh(0, max_element_mm / 1000, min_element_mm / 1000, False)
+        for _ in range(30):
+            time.sleep(1)
+            if study.MeshError == 0:
+                info = mesh_mgr.GetMesh()
+                return f"Сітка готова: {info.NodeCount} вузлів, {info.ElementCount} елементів"
+        return "Сітка не завершена за 30 сек"
+    except Exception as e:
+        raise RuntimeError(f"Помилка сітки: {e}")
 
 @mcp.tool()
 def sw_simulation_results(study_name: str = "Static 1") -> str:
