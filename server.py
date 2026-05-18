@@ -230,7 +230,7 @@ def sw_new_assembly() -> str:
             "Шаблон Assembly.asmdot не знайдено. "
             "Перевірте Інструменти → Параметри → Розташування файлів → Шаблони документів"
         )
-    swApp.NewDocument(path, 1, 0, 0)
+    swApp.NewDocument(path, 0, 0, 0)
     return "Нова збірка створена"
 
 
@@ -249,41 +249,44 @@ def sw_add_component(
     if not os.path.exists(part_path):
         return f"Файл не знайдено: {part_path}"
     asm = _doc()
-    comp = asm.AddComponent4(part_path, "", x_mm / 1000, y_mm / 1000, z_mm / 1000)
+    # AddComponent5: path, configOption, configName, alignWithFixed, x, y, z  (coords in metres)
+    comp = asm.AddComponent5(part_path, 0, "", False, x_mm / 1000, y_mm / 1000, z_mm / 1000)
     if comp is None:
-        return f"Не вдалось додати компонент: {part_path}"
+        raise RuntimeError(f"SolidWorks не зміг вставити компонент: {part_path}")
     return f"Компонент додано: {os.path.basename(part_path)} @ ({x_mm}, {y_mm}, {z_mm}) мм"
 
 
 @mcp.tool()
 def sw_add_mate(
     mate_type: str,
-    entity1: str,
-    entity2: str
+    entity1: str = "",
+    entity2: str = ""
 ) -> str:
     """
     Додати спряження (mate) між двома об'єктами збірки.
-    mate_type: 'coincident' | 'concentric' | 'parallel' | 'perpendicular' | 'distance' | 'angle'
-    entity1, entity2 — назви компонентів або граней (ім'я компонента)
+    mate_type: 'coincident' | 'parallel' | 'perpendicular' | 'concentric' | 'distance' | 'angle'
+    entity1, entity2 — назви граней/осей для SelectByID2
     """
+    # swMateType_e values from SolidWorks API
     MATE_TYPES = {
         "coincident":    0,
-        "concentric":    1,
-        "parallel":      3,
-        "perpendicular": 4,
+        "parallel":      1,
+        "perpendicular": 2,
+        "concentric":    4,
         "distance":      5,
         "angle":         6,
     }
-    code = MATE_TYPES.get(mate_type.lower())
-    if code is None:
-        return f"Невідомий тип спряження: {mate_type}. Доступні: {', '.join(MATE_TYPES)}"
+    code = MATE_TYPES.get(mate_type.lower(), 0)
     asm = _doc()
-    asm.Extension.SelectByID2(entity1, "FACE", 0, 0, 0, False, 1, None, 0)
-    asm.Extension.SelectByID2(entity2, "FACE", 0, 0, 0, True, 1, None, 0)
+    if entity1:
+        asm.Extension.SelectByID2(entity1, "FACE", 0, 0, 0, False, 1, None, 0)
+    if entity2:
+        asm.Extension.SelectByID2(entity2, "FACE", 0, 0, 0, True, 1, None, 0)
     mate = asm.FeatureManager.InsertMate5(code, False, 0, 0, 0, 0, 0, 0, 0, 0, 0, False, False, 0, 0)
     if mate is None:
-        return f"Не вдалось створити спряження {mate_type}"
-    return f"Спряження '{mate_type}' між {entity1} ↔ {entity2} додано"
+        raise RuntimeError(f"Не вдалось створити спряження '{mate_type}'")
+    label = entity1 and entity2 and f" між {entity1} ↔ {entity2}" or ""
+    return f"Спряження '{mate_type}'{label} додано"
 
 
 @mcp.tool()
