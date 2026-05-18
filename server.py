@@ -145,8 +145,19 @@ def sw_set_material(material: str) -> str:
         r"C:\Program Files\SolidWorks Corp\SolidWorks\lang\english\sldmaterials\solidworks materials.sldmat",
     ]
     db = next((p for p in db_candidates if os.path.exists(p)), "solidworks materials.sldmat")
-    _doc().SetMaterialPropertyName2("Default", db, material)
-    return f"Матеріал: {material}"
+    doc = _doc()
+    # Use active configuration name; fall back to "" (all configs) if unavailable
+    try:
+        cfg_name = doc.IGetActiveConfiguration().Name
+    except Exception:
+        cfg_name = ""
+    for name in (cfg_name, "Default", ""):
+        try:
+            doc.SetMaterialPropertyName2(name, db, material)
+            return f"Матеріал: {material} (конфігурація: {name!r})"
+        except Exception:
+            continue
+    return f"Увага: матеріал '{material}' не встановлено (COM-метод недоступний або документ ще порожній)"
 
 @mcp.tool()
 def sw_save(filepath: str) -> str:
@@ -1939,9 +1950,6 @@ def drever_spec() -> str:
         return f.read()
 
 # ─────────────────────────────────────────
-if __name__ == "__main__":
-    mcp.run()
-# ─────────────────────────────────────────
 # DREVER INGENIERING — 3D КОНФІГУРАЦІЇ
 # ─────────────────────────────────────────
 
@@ -1961,10 +1969,8 @@ def drever_create_handle(
     """
     name = f"drever_{level}_{scenario}_{int(length_mm)}mm"
     sldprt = os.path.join(WORK_DIR, f"{name}.sldprt")
-    dxf    = os.path.join(WORK_DIR, f"{name}.dxf")
     stl    = os.path.join(WORK_DIR, f"{name}.stl")
 
-     
     # Параметри з технічного звіту
     configs = {
         "budget": {"wall": 1.5, "slot_w": 8.0,  "slot_h": 4.0, "led_density": 60},
@@ -1973,30 +1979,92 @@ def drever_create_handle(
     }
     cfg = configs.get(level, configs["mid"])
 
-    sw_new_part()
-    sw_set_material(material)
+    try:
+        sw_new_part()
+    except Exception as e:
+        return f"[FAIL sw_new_part] {e}"
+    try:
+        sw_set_material(material)
+    except Exception as e:
+        return f"[FAIL sw_set_material] {e}"
 
-    # Базовий профіль 20×40 мм
-    sw_sketch_start("Front Plane")
-    sw_sketch_line(0, 0, 20, 0)
-    sw_sketch_line(20, 0, 20, 40)
-    sw_sketch_line(20, 40, 0, 40)
-    sw_sketch_line(0, 40, 0, 0)
-    sw_sketch_finish()
-    sw_extrude(length_mm, both_directions=False, thin_feature=True,
-               thin_thickness=cfg["wall"])
+    doc = _doc()
+    L    = length_mm / 1000
+    wall = cfg["wall"] / 1000
+    sw_s = cfg["slot_w"] / 1000
+    sh   = cfg["slot_h"] / 1000
+    w, h = 0.020, 0.040  # 20 mm × 40 mm cross-section
 
-    # Слот під розсіювач
-    sw_sketch_start("Top Plane")
-    cx = 10.0  # центр 20 мм грані
-    sw_sketch_line(cx - cfg["slot_w"]/2, 0,
-                   cx + cfg["slot_w"]/2, 0)
-    sw_sketch_finish()
-    sw_extrude(cfg["slot_h"], both_directions=False)
+    # ── Step 1: outer solid extrusion (single closed contour) ────────────
+    try:
+        doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
+    except Exception as e:
+        return f"[FAIL SelectByID2 Front Plane] {e}"
+    try:
+        doc.SketchManager.InsertSketch(True)
+    except Exception as e:
+        return f"[FAIL InsertSketch step1] {e}"
+    try:
+        doc.SketchManager.CreateLine(0, 0, 0,  w, 0, 0)
+        doc.SketchManager.CreateLine(w, 0, 0,  w, h, 0)
+        doc.SketchManager.CreateLine(w, h, 0,  0, h, 0)
+        doc.SketchManager.CreateLine(0, h, 0,  0, 0, 0)
+    except Exception as e:
+        return f"[FAIL CreateLine outer rect] {e}"
+    doc.ClearSelection2(True)
+    try:
+        feat = doc.FeatureManager.FeatureExtrusion2(
+            True, False, False, 0, 0, L, 0.0,
+            False, False, False, False, 0.0, 0.0,
+            False, False, False, False, True, False, True,
+        )
+    except Exception as e:
+        return f"[FAIL FeatureExtrusion2] {e}"
+    if feat is None:
+        return "[FAIL] FeatureExtrusion2 returned None — перевірте SolidWorks"
+
+    # ── Step 2: inner hollow cut (ThroughAll, single closed contour) ─────
+    doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
+    doc.SketchManager.InsertSketch(True)
+    doc.SketchManager.CreateLine(wall,     wall,     0, w - wall, wall,     0)
+    doc.SketchManager.CreateLine(w - wall, wall,     0, w - wall, h - wall, 0)
+    doc.SketchManager.CreateLine(w - wall, h - wall, 0, wall,     h - wall, 0)
+    doc.SketchManager.CreateLine(wall,     h - wall, 0, wall,     wall,     0)
+    doc.ClearSelection2(True)
+    feat_hollow = doc.FeatureManager.FeatureCut4(
+        True, False, False, 1, 0, 0.0, 0.0,
+        False, False, False, False, 0.0, 0.0,
+        False, False, False, False, True, False, True,
+        False, False, False,
+    )
+    if feat_hollow is None:
+        raise RuntimeError("Inner hollow cut failed — check sketch on Front Plane")
+
+    # ── Step 3: LED slot cut (cross-section on Front Plane, ThroughAll) ──
+    # Slot runs full tube length; cuts from top face (Y=h) downward by sh.
+    cx = w / 2
+    doc.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, False, 0, None, 0)
+    doc.SketchManager.InsertSketch(True)
+    doc.SketchManager.CreateLine(cx - sw_s/2, h - sh, 0, cx + sw_s/2, h - sh, 0)
+    doc.SketchManager.CreateLine(cx + sw_s/2, h - sh, 0, cx + sw_s/2, h,      0)
+    doc.SketchManager.CreateLine(cx + sw_s/2, h,      0, cx - sw_s/2, h,      0)
+    doc.SketchManager.CreateLine(cx - sw_s/2, h,      0, cx - sw_s/2, h - sh, 0)
+    doc.ClearSelection2(True)
+    feat_slot = doc.FeatureManager.FeatureCut4(
+        True, False, False, 1, 0, 0.0, 0.0,
+        False, False, False, False, 0.0, 0.0,
+        False, False, False, False, True, False, True,
+        False, False, False,
+    )
+    if feat_slot is None:
+        raise RuntimeError("LED slot cut failed — check sketch on Front Plane")
 
     sw_save(sldprt)
-    sw_export_dxf(dxf)
-    sw_export_stl(stl)
+    stl_result = stl
+    try:
+        sw_export_stl(stl)
+    except Exception as e:
+        stl_result = f"(STL error: {e})"
 
     bom = {
         "name": name,
@@ -2008,7 +2076,7 @@ def drever_create_handle(
         "wall_mm": cfg["wall"],
         "slot_mm": f"{cfg['slot_w']}x{cfg['slot_h']}",
         "led_density": cfg["led_density"],
-        "files": {"sldprt": sldprt, "dxf": dxf, "stl": stl}
+        "files": {"sldprt": sldprt, "stl": stl_result},
     }
     bom_path = os.path.join(WORK_DIR, f"{name}_bom.json")
     with open(bom_path, "w", encoding="utf-8") as f:
@@ -2021,7 +2089,9 @@ def drever_create_handle(
         f"✓ Слот розсіювача: {cfg['slot_w']}×{cfg['slot_h']}мм\n"
         f"✓ LED щільність: {cfg['led_density']} LED/м\n"
         f"✓ SLDPRT → {sldprt}\n"
-        f"✓ DXF    → {dxf}\n"
-        f"✓ STL    → {stl}\n"
+        f"✓ STL    → {stl_result}\n"
         f"✓ BOM    → {bom_path}"
     )
+
+if __name__ == "__main__":
+    mcp.run()
