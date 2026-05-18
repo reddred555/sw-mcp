@@ -1577,6 +1577,94 @@ def sw_simulation_setup(study_name: str = "Static 1") -> str:
         raise RuntimeError(f"SW Simulation недоступний: {e}")
 
 @mcp.tool()
+def sw_simulation_set_material(
+    material: str = "ABS",
+    study_name: str = "Static 1",
+) -> str:
+    """
+    Призначити матеріал тілам у дослідженні через StudyBodyManager.
+    Викликайте після sw_simulation_setup, до sw_simulation_run.
+    """
+    cosmos = _get_cosmos()
+    study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name)
+    if study is None:
+        return f"Дослідження '{study_name}' не знайдено."
+    try:
+        body_mgr = study.StudyBodyManager
+        count = int(body_mgr.Count) if body_mgr.Count else 0
+        if count == 0:
+            return "Тіл у дослідженні не знайдено (виконайте Rebuild і повторіть)."
+        for i in range(count):
+            body_mgr.Item(i + 1).Material = material
+        return f"Матеріал '{material}' призначено {count} тіл(у/ам) у '{study_name}'"
+    except Exception as e:
+        raise RuntimeError(f"Помилка призначення матеріалу: {e}")
+
+@mcp.tool()
+def sw_simulation_add_fixture(
+    study_name: str = "Static 1",
+    fixture_type: str = "fixed",
+) -> str:
+    """
+    Додати закріплення до виділених граней/ребер у SolidWorks.
+    Виділіть геометрію в SW перед викликом.
+    fixture_type: 'fixed' | 'hinge' | 'roller'
+    """
+    cosmos = _get_cosmos()
+    study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name)
+    if study is None:
+        return f"Дослідження '{study_name}' не знайдено."
+    try:
+        bc_mgr = study.FixtureManager
+        errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+        ftype = fixture_type.lower()
+        if ftype == "fixed":
+            result = bc_mgr.AddFixed(None, 0, 0, errors)
+        elif ftype == "hinge":
+            result = bc_mgr.AddHinge(None, 0, 0, errors)
+        elif ftype == "roller":
+            result = bc_mgr.AddRoller(None, 0, 0, errors)
+        else:
+            return f"Невідомий тип: '{fixture_type}'. Допустимі: fixed, hinge, roller"
+        if result is None:
+            return "Закріплення не додано — виділіть грань у SolidWorks і повторіть."
+        if errors.value != 0:
+            return f"Закріплення додано з попередженням (err={errors.value})"
+        return f"Закріплення '{fixture_type}' додано до '{study_name}'"
+    except Exception as e:
+        raise RuntimeError(f"Помилка додавання закріплення: {e}")
+
+@mcp.tool()
+def sw_simulation_add_force(
+    study_name: str = "Static 1",
+    force_n: float = 10.0,
+    direction: str = "normal",
+    reverse: bool = False,
+) -> str:
+    """
+    Додати силу до виділених граней у SolidWorks.
+    Виділіть грань у SW перед викликом.
+    direction: 'normal' — перпендикулярно до грані | 'selected' — за виділеним ребром.
+    reverse: змінити напрямок сили.
+    """
+    cosmos = _get_cosmos()
+    study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name)
+    if study is None:
+        return f"Дослідження '{study_name}' не знайдено."
+    try:
+        load_mgr = study.ExternalLoadsManager
+        dir_flag = 0 if direction == "normal" else 1
+        errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+        result = load_mgr.AddForce(None, 0, 1, force_n, dir_flag, reverse, errors)
+        if result is None:
+            return "Навантаження не додано — виділіть грань у SolidWorks і повторіть."
+        if errors.value != 0:
+            return f"Навантаження додано з попередженням (err={errors.value})"
+        return f"Сила {force_n} Н ({direction}) додана до '{study_name}'"
+    except Exception as e:
+        raise RuntimeError(f"Помилка додавання навантаження: {e}")
+
+@mcp.tool()
 def sw_simulation_run(study_name: str = "Static 1") -> str:
     """Запустити розрахунок статичного дослідження."""
     try:
@@ -1622,24 +1710,50 @@ def sw_simulation_mesh(
         raise RuntimeError(f"Помилка сітки: {e}")
 
 @mcp.tool()
-def sw_simulation_results(study_name: str = "Static 1") -> str:
+def sw_simulation_results(
+    study_name: str = "Static 1",
+    yield_mpa: float = 40.0,
+) -> str:
     """
     Отримати результати статичного аналізу:
     максимальне напруження (von Mises), переміщення, запас міцності.
+    yield_mpa: границя текучості матеріалу для розрахунку SF (МПа).
     """
     try:
         cosmos = _get_cosmos()
-        results = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name).Results()
-        stress_data = results.GetResultData2(0, 0, 0, None)   # VON_MISES
-        disp_data   = results.GetResultData2(1, 0, 0, None)   # DISPLACEMENT
-        fos_data    = results.GetResultData2(11, 0, 0, None)  # FACTOR_OF_SAFETY
+        study = cosmos.cwDoc(_doc()).StudyManager().GetStudy(study_name)
+        if study is None:
+            return f"Дослідження '{study_name}' не знайдено."
+        results = study.Results()
+        if results is None:
+            return "Результати недоступні — запустіть sw_simulation_run."
+
         lines = [f"Результати: '{study_name}'"]
-        if stress_data:
-            lines.append(f"Макс. напруження (von Mises): {stress_data.GetMaxValue()/1e6:.2f} МПа")
-        if disp_data:
-            lines.append(f"Макс. переміщення:            {disp_data.GetMaxValue()*1000:.4f} мм")
-        if fos_data:
-            lines.append(f"Мін. запас міцності:          {fos_data.GetMinValue():.2f}")
+
+        # von Mises stress — swsStressComponentVonMises = 0
+        try:
+            min_s = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_R8, 0.0)
+            max_s = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_R8, 0.0)
+            results.GetMinMaxStress2(0, 0, 0, None, None, min_s, max_s)
+            vm_max = float(max_s.value)
+            lines.append(f"Макс. напруження (von Mises): {vm_max / 1e6:.2f} МПа")
+            sf = yield_mpa / (vm_max / 1e6) if vm_max > 0 else float("inf")
+            status = "OK" if sf >= 1.5 else ("ГРАНИЧНИЙ" if sf >= 1.0 else "НЕБЕЗПЕЧНО")
+            lines.append(f"Запас міцності SF:            {sf:.2f}  [{status}]")
+        except Exception:
+            pass
+
+        # URES displacement — swsDisplacementComponentURES = 0
+        try:
+            min_d = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_R8, 0.0)
+            max_d = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_R8, 0.0)
+            results.GetMinMaxDisplacement2(0, 0, None, None, min_d, max_d)
+            lines.append(f"Макс. переміщення:            {float(max_d.value) * 1000:.4f} мм")
+        except Exception:
+            pass
+
+        if len(lines) == 1:
+            return "Результати порожні — перевірте чи завершився розрахунок."
         return "\n".join(lines)
     except Exception as e:
         raise RuntimeError(f"Помилка отримання результатів: {e}")
