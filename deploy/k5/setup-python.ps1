@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Встановлення Python + pyodbc для інтеграції Claude <-> K5 Access.
 .DESCRIPTION
@@ -109,8 +109,12 @@ $pipExe = Join-Path $venvDir "Scripts\pip.exe"
 $pythonVenv = Join-Path $venvDir "Scripts\python.exe"
 
 Write-Host "  [...] Встановлення залежностей..." -ForegroundColor Yellow
-& $pipExe install --upgrade pip | Out-Null
-& $pipExe install pyodbc fastapi uvicorn pydantic | Out-Null
+& $pythonVenv -m pip install --upgrade pip | Out-Null
+& $pythonVenv -m pip install pyodbc fastapi uvicorn pydantic | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  [!] Помилка встановлення залежностей (код $LASTEXITCODE)" -ForegroundColor Red
+    exit 1
+}
 Write-Host "  [OK] pyodbc, fastapi, uvicorn, pydantic встановлено" -ForegroundColor Green
 
 # ============================================================
@@ -125,6 +129,8 @@ $dbFiles = @()
 if ($accdbFiles) { $dbFiles += $accdbFiles }
 if ($mdbFiles)   { $dbFiles += $mdbFiles }
 
+$connectionOk = $false
+
 if ($dbFiles.Count -eq 0) {
     Write-Host "  [--] Файли бази не знайдені в D:\K5\base\" -ForegroundColor DarkGray
     Write-Host "       Розпакуйте архіви К5 спочатку (setup-k5.ps1)" -ForegroundColor Yellow
@@ -136,10 +142,11 @@ if ($dbFiles.Count -eq 0) {
 import pyodbc, sys
 db = r'$($testDb -replace "'","''")'
 try:
-    drv = [d for d in pyodbc.drivers() if 'Access' in d]
+    # Only the ACE driver opens .accdb; the legacy Jet '(*.mdb)' drivers fail with -1028
+    drv = [d for d in pyodbc.drivers() if '*.accdb' in d]
     if not drv:
-        print('[FAIL] ODBC driver not found'); sys.exit(1)
-    conn = pyodbc.connect(f'DRIVER={{{drv[0]}}};DBQ={db};')
+        print('[FAIL] ACE ODBC driver (*.mdb, *.accdb) not found'); sys.exit(1)
+    conn = pyodbc.connect(f'DRIVER={{{drv[0]}}};DBQ={db};', readonly=True)
     cursor = conn.cursor()
     tables = [t.table_name for t in cursor.tables(tableType='TABLE')]
     print(f'[OK] Connected. Tables: {len(tables)}')
@@ -154,6 +161,7 @@ except Exception as e:
 
     $testScript | & $pythonVenv -
     if ($LASTEXITCODE -eq 0) {
+        $connectionOk = $true
         Write-Host "  [OK] Підключення успішне!" -ForegroundColor Green
     } else {
         Write-Host "  [!] Не вдалося підключитися. Перевірте розрядність Python/Office." -ForegroundColor Red
@@ -164,6 +172,12 @@ except Exception as e:
 # DONE
 # ============================================================
 Write-Host ""
+if ($dbFiles.Count -gt 0 -and -not $connectionOk) {
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  Python встановлено, але підключення до Access НЕ працює" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    exit 1
+}
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Python Integration Ready!" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan

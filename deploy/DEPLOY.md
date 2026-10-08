@@ -59,6 +59,11 @@ Then activate:
 
 Creates `D:\K5\` structure, extracts archives, configures Trusted Locations.
 
+Archives and working `.accdb` copies are looked up on the desktops and in `D:\K5`
+(override with `-SearchPaths`). Each archive is extracted into its own subfolder
+(`base\K5-033-ka\`); the newest loose working copy goes directly into `base\` / `updates\`.
+Nothing is ever overwritten, so the script is safe to re-run.
+
 ---
 
 ### Step 4. Python + Integration Layer
@@ -88,9 +93,15 @@ D:\K5\
 **pyodbc can't connect to Access:**
 Python and Office must be the same bitness (both x86 or both x64).
 Recommended: Office x86 + Python x86.
+Use the `Microsoft Access Driver (*.mdb, *.accdb)` (ACE) driver — the legacy
+`(*.mdb)` Jet drivers fail on `.accdb` with error `-1028`.
+
+**Scripts fail with parse errors / garbled Cyrillic:**
+Windows PowerShell 5.1 needs `.ps1` files saved as UTF-8 **with BOM**.
 
 **Macros blocked in Access:**
 Run `setup-k5.ps1` again — it sets Trusted Locations via registry.
+Keep the database inside `D:\K5\`; macros are not enabled globally (`VBAWarnings` is left untouched).
 
 **Archive extraction fails:**
 Install 7-Zip from https://www.7-zip.org/download.html

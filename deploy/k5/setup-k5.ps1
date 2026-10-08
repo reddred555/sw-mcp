@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     Розгортання бази К5: папки, розпакування архівів, Trusted Locations.
@@ -6,11 +6,19 @@
     1. Створює структуру папок D:\K5\
     2. Розпаковує архіви К5 з робочого столу
     3. Реєструє Trusted Locations для Access в реєстрі
-    4. Вимикає блокування макросів
+    Архіви та .accdb шукаються на робочих столах і в корені D:\K5.
+    Нічого не перезаписує: вже розпаковане / скопійоване пропускається.
+.PARAMETER SearchPaths
+    Де шукати архіви та бази (за замовчуванням: робочі столи + D:\K5).
 .NOTES
     Запускати: PowerShell від Адміністратора
     .\setup-k5.ps1
+    .\setup-k5.ps1 -SearchPaths "E:\K5-archives"
 #>
+
+param(
+    [string[]]$SearchPaths = @("$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop", "D:\K5")
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -23,14 +31,13 @@ $k5Base       = "D:\K5\base"
 $k5Updates    = "D:\K5\updates"
 $k5Temp       = "D:\K5\_temp"
 
-$desktopPath  = "$env:USERPROFILE\Desktop"
-$publicDesktop = "$env:PUBLIC\Desktop"
-
-# Archives to look for (in order of deployment)
+# Archives to look for (in order of deployment).
+# Db = name of the .accdb inside the archive; a loose working copy with this
+# name in $SearchPaths is newer than the archive and is copied to Target.
 $archives = @(
-    @{ Pattern = "K5-033-ka*";        Target = $k5Base;    Name = "K5 Base v033" },
-    @{ Pattern = "Nv5-048R*";         Target = $k5Updates; Name = "K5 Update Nv5-048R" },
-    @{ Pattern = "Nv-V-5-48-Rita*";   Target = $k5Updates; Name = "K5 Update Rita v48" }
+    @{ Pattern = "K5-033-ka*";        Db = "K5-033-ka.accdb"; Target = $k5Base;    Name = "K5 Base v033" },
+    @{ Pattern = "Nv5-048R*";         Db = "Nv5-048R.accdb";  Target = $k5Updates; Name = "K5 Update Nv5-048R" },
+    @{ Pattern = "Nv-V-5-48-Rita*";   Db = "Nv-V-5-48.accdb"; Target = $k5Updates; Name = "K5 Update Rita v48" }
 )
 
 Write-Host "=== K5 Database Deployment ===" -ForegroundColor Cyan
@@ -99,7 +106,7 @@ if ($sevenZipExe) {
 Write-Host ""
 Write-Host "[3/5] Пошук та розпакування архівів К5..." -ForegroundColor Yellow
 
-$searchPaths = @($desktopPath, $publicDesktop)
+$searchPaths = $SearchPaths
 
 foreach ($archive in $archives) {
     $found = $null
@@ -125,16 +132,15 @@ foreach ($archive in $archives) {
             continue
         }
 
-        Write-Host "       Розпаковую в $targetDir ..." -ForegroundColor Yellow
+        # Extract into its own subfolder (checked above) and never overwrite:
+        # extracting into $targetDir itself would clobber the working copy there.
+        Write-Host "       Розпаковую в $extractDir ..." -ForegroundColor Yellow
+        New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
 
         if ($archiver -eq "7zip") {
-            & $sevenZipExe x $found.FullName "-o$targetDir" -y | Out-Null
+            & $sevenZipExe x $found.FullName "-o$extractDir" -aos | Out-Null
         } else {
-            if ($unrarExe -match "UnRAR") {
-                & $unrarExe x $found.FullName $targetDir\ -y | Out-Null
-            } else {
-                & $unrarExe x $found.FullName $targetDir\ | Out-Null
-            }
+            & $unrarExe x -o- $found.FullName "$extractDir\" | Out-Null
         }
 
         if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null) {
@@ -143,21 +149,27 @@ foreach ($archive in $archives) {
             Write-Host "       [!] Помилка розпакування (код $LASTEXITCODE)" -ForegroundColor Red
         }
     } else {
-        Write-Host "  [--] $($archive.Name) не знайдено на робочому столі" -ForegroundColor DarkGray
+        Write-Host "  [--] $($archive.Name) не знайдено в: $($searchPaths -join ', ')" -ForegroundColor DarkGray
     }
 }
 
-# Also copy non-archived .accdb/.mdb from desktop
+# Copy loose working copies (newer than archives) next to the extracted ones.
+# Non-recursive, so D:\K5\base, \updates, \_backup are never re-scanned.
 Write-Host ""
-Write-Host "  Пошук .accdb/.mdb файлів на робочому столі..." -ForegroundColor Yellow
-foreach ($searchPath in $searchPaths) {
-    $dbFiles = Get-ChildItem -Path $searchPath -Include "*.accdb","*.mdb" -Recurse -ErrorAction SilentlyContinue
-    foreach ($db in $dbFiles) {
-        $dest = Join-Path $k5Base $db.Name
-        if (-not (Test-Path $dest)) {
-            Copy-Item -Path $db.FullName -Destination $dest
-            Write-Host "  [+] Скопійовано: $($db.Name)" -ForegroundColor Green
-        }
+Write-Host "  Пошук робочих копій .accdb..." -ForegroundColor Yellow
+foreach ($archive in $archives) {
+    $loose = foreach ($searchPath in $searchPaths) {
+        Get-ChildItem -Path $searchPath -Filter $archive.Db -File -ErrorAction SilentlyContinue
+    }
+    $newest = $loose | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $newest) { continue }
+
+    $dest = Join-Path $archive.Target $newest.Name
+    if (Test-Path $dest) {
+        Write-Host "  [=] $dest (вже існує)" -ForegroundColor DarkGray
+    } else {
+        Copy-Item -Path $newest.FullName -Destination $dest
+        Write-Host "  [+] $($newest.FullName) -> $dest ($($newest.LastWriteTime.ToString('yyyy-MM-dd')))" -ForegroundColor Green
     }
 }
 
@@ -170,15 +182,20 @@ Write-Host "[4/5] Створення бекапу..." -ForegroundColor Yellow
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
 $backupDir = Join-Path $k5Backup $timestamp
 
-$dbFilesInBase = Get-ChildItem -Path $k5Base -Include "*.accdb","*.mdb" -Recurse -ErrorAction SilentlyContinue
-if ($dbFilesInBase) {
-    New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
-    foreach ($db in $dbFilesInBase) {
-        Copy-Item -Path $db.FullName -Destination $backupDir
-        Write-Host "  [+] Бекап: $($db.Name) -> $backupDir" -ForegroundColor Green
+# Keep paths relative to D:\K5 so same-named files (base\X.accdb and
+# base\X\X.accdb) don't overwrite each other in the backup.
+$dbFilesToBackup = Get-ChildItem -Path $k5Base, $k5Updates -Include "*.accdb","*.mdb" -Recurse -ErrorAction SilentlyContinue
+if ($dbFilesToBackup) {
+    foreach ($db in $dbFilesToBackup) {
+        $relPath = $db.FullName.Substring($k5Root.Length).TrimStart('\')
+        $dest = Join-Path $backupDir $relPath
+        New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force | Out-Null
+        Copy-Item -Path $db.FullName -Destination $dest
+        Write-Host "  [+] Бекап: $relPath" -ForegroundColor Green
     }
+    Write-Host "  -> $backupDir" -ForegroundColor DarkGray
 } else {
-    Write-Host "  [--] .accdb/.mdb файли ще не знайдені в $k5Base" -ForegroundColor DarkGray
+    Write-Host "  [--] .accdb/.mdb файли ще не знайдені в $k5Base, $k5Updates" -ForegroundColor DarkGray
 }
 
 # ============================================================
@@ -216,11 +233,8 @@ foreach ($ver in $accessVersions) {
         Write-Host "  [+] Trusted Location: $trustedPath (Access $ver)" -ForegroundColor Green
         $locationIndex++
     }
-
-    # Disable VBA macro notification (enable all macros for trusted locations)
-    $securityKey = "HKCU:\Software\Microsoft\Office\$ver\Access\Security"
-    Set-ItemProperty -Path $securityKey -Name "VBAWarnings" -Value 1 -Type DWord
-    Write-Host "  [+] Макроси увімкнено для Access $ver" -ForegroundColor Green
+    # Macros in Trusted Locations run without prompts. VBAWarnings is deliberately
+    # left alone: VBAWarnings=1 would enable macros in EVERY Access file.
 }
 
 # ============================================================
