@@ -1,0 +1,29 @@
+<Configuration>
+  <!--
+    Office 2019 Pro Plus x86 (Volume License)
+    Access + Excel + Word + Outlook
+    UK + EN language
+  -->
+  <Add OfficeClientEdition="32" Channel="PerpetualVL2019">
+    <Product ID="ProPlus2019Volume" PIDKEY="NMMKJ-6RK4F-KMJVX-8D9MJ-6MWKP">
+      <Language ID="uk-UA" />
+      <Language ID="en-US" />
+      <!-- Keep only what's needed, exclude the rest -->
+      <ExcludeApp ID="Groove" />
+      <ExcludeApp ID="Lync" />
+      <ExcludeApp ID="OneDrive" />
+      <ExcludeApp ID="OneNote" />
+      <ExcludeApp ID="Publisher" />
+      <ExcludeApp ID="Teams" />
+    </Product>
+  </Add>
+
+  <Property Name="SharedComputerLicensing" Value="0" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
+  <Property Name="DeviceBasedLicensing" Value="0" />
+  <Property Name="SCLCacheOverride" Value="0" />
+
+  <Updates Enabled="FALSE" />
+
+  <Display Level="Full" AcceptEULA="TRUE" />
+</Configuration>
